@@ -1,0 +1,295 @@
+import styles from "./page.module.css";
+
+const SECTIONS = [
+  { id: "overview", label: "Overview" },
+  { id: "search", label: "Search" },
+  { id: "profile", label: "Profile" },
+  { id: "schema", label: "Media schema" },
+  { id: "caching", label: "Caching" },
+  { id: "errors", label: "Errors" },
+];
+
+const SEARCH_PARAMS = [
+  { name: "q", type: "string", required: true, description: "Search text, 1–100 characters. Leading and trailing whitespace is trimmed." },
+  { name: "limit", type: "integer", required: false, description: "Results per type. Defaults to 5, clamped between 1 and 10." },
+];
+
+const PROFILE_PARAMS = [
+  { name: "type", type: "string", required: true, description: "One of anime, manga or game." },
+  { name: "id", type: "integer", required: true, description: "The source id: MyAnimeList id for anime and manga, IGDB id for games." },
+];
+
+const SCHEMA_FIELDS = [
+  { name: "id", type: "string", description: "Type and source id joined, e.g. ANIME_52991. Also the Firestore document id." },
+  { name: "type", type: '"ANIME" | "MANGA" | "GAME"', description: "Media type." },
+  { name: "sourceId", type: "string", description: "Id at the source provider." },
+  { name: "title", type: "string", description: "Primary title." },
+  { name: "altTitles", type: "string[]", description: "Other known titles." },
+  { name: "synopsis", type: "string | null", description: "Plot summary or description." },
+  { name: "coverImage", type: "string | null", description: "Cover art. AniList for anime and manga, falling back to MyAnimeList." },
+  { name: "bannerImage", type: "string | null", description: "Wide banner. AniList for anime and manga, IGDB artwork for games." },
+  { name: "year", type: "number | null", description: "Year of first release." },
+  { name: "status", type: "string | null", description: "Release status as reported by the provider." },
+  { name: "genres", type: "string[]", description: "Genres and themes." },
+  { name: "score", type: "number | null", description: "Rating normalized to 0–10." },
+  { name: "source", type: "{ provider, url }", description: "Where the data came from: jikan or igdb." },
+  { name: "details", type: "object", description: "Type-specific fields, listed below." },
+  { name: "createdAt", type: "string", description: "Profile only. ISO date the item was first saved." },
+  { name: "updatedAt", type: "string", description: "Profile only. ISO date the item was last refreshed." },
+];
+
+const DETAILS = [
+  { type: "ANIME", fields: "format, episodes, duration, rating, season, studios, airedFrom, airedTo" },
+  { type: "MANGA", fields: "format, chapters, volumes, authors, serializations, publishedFrom, publishedTo" },
+  { type: "GAME", fields: "platforms, developers, publishers, releaseDate" },
+];
+
+const ERRORS = [
+  { status: "400", when: "Search was called without q, or q is longer than 100 characters." },
+  { status: "404", when: "Unknown type, non-numeric id, or the provider has no item with that id." },
+  { status: "502", when: "The provider or database failed and no saved copy could be returned." },
+];
+
+const SEARCH_RESPONSE = `{
+  "query": "frieren",
+  "results": {
+    "anime": [
+      {
+        "id": "ANIME_52991",
+        "type": "ANIME",
+        "sourceId": "52991",
+        "title": "Sousou no Frieren",
+        "altTitles": ["Frieren: Beyond Journey's End"],
+        "coverImage": "https://s4.anilist.co/…/bx154587.jpg",
+        "bannerImage": "https://s4.anilist.co/…/154587.jpg",
+        "year": 2023,
+        "score": 9.3,
+        "source": { "provider": "jikan", "url": "https://myanimelist.net/anime/52991" },
+        "details": { "format": "TV", "episodes": 28, … }
+      }
+    ],
+    "manga": [ … ],
+    "game": [ … ]
+  }
+}`;
+
+const PARTIAL_RESPONSE = `{
+  "query": "frieren",
+  "results": { "anime": [ … ], "manga": [ … ], "game": [] },
+  "errors": { "game": "Search failed" }
+}`;
+
+const PROFILE_RESPONSE = `{
+  "id": "ANIME_52991",
+  "type": "ANIME",
+  "title": "Sousou no Frieren",
+  …
+  "createdAt": "2026-10-10T08:00:00.000Z",
+  "updatedAt": "2026-10-10T08:00:00.000Z"
+}`;
+
+function Params({ rows }: { rows: { name: string; type: string; required: boolean; description: string }[] }) {
+  return (
+    <dl className={styles.fields}>
+      {rows.map((row) => (
+        <div key={row.name} className={styles.field}>
+          <dt>
+            <code className={styles.name}>{row.name}</code>
+            <span className={styles.type}>{row.type}</span>
+            {row.required && <span className={styles.required}>required</span>}
+          </dt>
+          <dd>{row.description}</dd>
+        </div>
+      ))}
+    </dl>
+  );
+}
+
+function Endpoint({ path }: { path: string }) {
+  return (
+    <p className={styles.endpoint}>
+      <span className={styles.method}>GET</span>
+      <code>{path}</code>
+    </p>
+  );
+}
+
+function Example({ label, children }: { label: string; children: string }) {
+  return (
+    <figure className={styles.example}>
+      <figcaption>{label}</figcaption>
+      <pre>
+        <code>{children}</code>
+      </pre>
+    </figure>
+  );
+}
+
+export default function Home() {
+  return (
+    <div className={styles.page}>
+      <nav className={styles.toc} aria-label="Sections">
+        <p className={styles.brand}>Library API</p>
+        <ol>
+          {SECTIONS.map((section) => (
+            <li key={section.id}>
+              <a href={`#${section.id}`}>{section.label}</a>
+            </li>
+          ))}
+        </ol>
+      </nav>
+
+      <main className={styles.main}>
+        <header id="overview" className={styles.header}>
+          <p className={styles.eyebrow}>Reference</p>
+          <h1>Library API</h1>
+          <p className={styles.lead}>
+            Search anime, manga and games from one endpoint, then fetch any result as a profile
+            that follows the same schema. Anime and manga data comes from Jikan with artwork from
+            AniList, and games come from IGDB.
+          </p>
+          <p className={styles.note}>
+            The API is public and read-only. All endpoints return JSON and accept <code>GET</code>{" "}
+            only.
+          </p>
+        </header>
+
+        <section id="search" className={styles.section}>
+          <h2>Search</h2>
+          <Endpoint path="/api/search?q={text}&limit={n}" />
+          <p>
+            Searches every media type at once and returns a separate list for each. Searching does
+            not save anything.
+          </p>
+
+          <h3>Query parameters</h3>
+          <Params rows={SEARCH_PARAMS} />
+
+          <h3>Example</h3>
+          <Example label="Request">{"curl '/api/search?q=frieren&limit=3'"}</Example>
+          <Example label="Response">{SEARCH_RESPONSE}</Example>
+
+          <h3>Partial results</h3>
+          <p>
+            Each provider is searched independently. If one fails, the other lists are still
+            returned, the failed list is empty, and an <code>errors</code> object names the type
+            that failed. Partial responses are only cached for a minute.
+          </p>
+          <Example label="Response with a failed provider">{PARTIAL_RESPONSE}</Example>
+        </section>
+
+        <section id="profile" className={styles.section}>
+          <h2>Profile</h2>
+          <Endpoint path="/api/{type}/{id}" />
+          <p>
+            Returns a single item. The first request for an item fetches it from the provider and
+            saves it to Firestore. Later requests are served from the saved copy, which is
+            refreshed once it is older than 30 days.
+          </p>
+
+          <h3>Path parameters</h3>
+          <Params rows={PROFILE_PARAMS} />
+
+          <h3>Example</h3>
+          <Example label="Request">{"curl /api/anime/52991"}</Example>
+          <Example label="Response">{PROFILE_RESPONSE}</Example>
+
+          <p className={styles.note}>
+            Use the <code>type</code> and <code>sourceId</code> of a search result to build the
+            profile URL, e.g. <code>ANIME</code> and <code>52991</code> become{" "}
+            <code>/api/anime/52991</code>.
+          </p>
+        </section>
+
+        <section id="schema" className={styles.section}>
+          <h2>Media schema</h2>
+          <p>Search results and profiles share the same shape for every type.</p>
+
+          <table className={styles.table}>
+            <thead>
+              <tr>
+                <th scope="col">Field</th>
+                <th scope="col">Type</th>
+                <th scope="col">Description</th>
+              </tr>
+            </thead>
+            <tbody>
+              {SCHEMA_FIELDS.map((field) => (
+                <tr key={field.name}>
+                  <td>
+                    <code className={styles.name}>{field.name}</code>
+                  </td>
+                  <td className={styles.type}>{field.type}</td>
+                  <td>{field.description}</td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+
+          <h3>Details by type</h3>
+          <table className={styles.table}>
+            <thead>
+              <tr>
+                <th scope="col">Type</th>
+                <th scope="col">Fields</th>
+              </tr>
+            </thead>
+            <tbody>
+              {DETAILS.map((row) => (
+                <tr key={row.type}>
+                  <td>
+                    <code className={styles.name}>{row.type}</code>
+                  </td>
+                  <td className={styles.type}>{row.fields}</td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </section>
+
+        <section id="caching" className={styles.section}>
+          <h2>Caching</h2>
+          <p>There are two layers of caching.</p>
+          <ul className={styles.list}>
+            <li>
+              <strong>CDN, 7 days.</strong> Successful responses are cached at the edge for 7 days,
+              keyed by the full URL. Note that <code>q=Naruto</code> and <code>q=naruto</code> are
+              cached separately.
+            </li>
+            <li>
+              <strong>Firestore, 30 days.</strong> Profiles are refreshed from the provider once the
+              saved copy is older than 30 days. If the provider is unavailable, the older copy is
+              returned instead.
+            </li>
+          </ul>
+          <p>Data can therefore be up to about 37 days old.</p>
+        </section>
+
+        <section id="errors" className={styles.section}>
+          <h2>Errors</h2>
+          <p>
+            Errors return a JSON body of the form <code>{'{ "error": "…" }'}</code>.
+          </p>
+          <table className={styles.table}>
+            <thead>
+              <tr>
+                <th scope="col">Status</th>
+                <th scope="col">When</th>
+              </tr>
+            </thead>
+            <tbody>
+              {ERRORS.map((row) => (
+                <tr key={row.status}>
+                  <td>
+                    <code className={styles.name}>{row.status}</code>
+                  </td>
+                  <td>{row.when}</td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </section>
+      </main>
+    </div>
+  );
+}
