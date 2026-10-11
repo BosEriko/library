@@ -1,0 +1,49 @@
+.header {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 24px;
+  width: 100%;
+  max-width: 1120px;
+  margin: 0 auto;
+  padding: 24px 32px;
+}
+
+.brand {
+  font-weight: 600;
+  font-size: 17px;
+  letter-spacing: -0.01em;
+}
+
+.nav {
+  display: flex;
+  gap: 24px;
+  font-size: 15px;
+}
+
+.nav a {
+  color: var(--muted);
+  transition: color 120ms ease;
+}
+
+.nav a:hover {
+  color: var(--foreground);
+}
+
+.header a:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 3px;
+  border-radius: 2px;
+}
+
+@media (max-width: 860px) {
+  .header {
+    padding: 20px;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .nav a {
+    transition: none;
+  }
+}

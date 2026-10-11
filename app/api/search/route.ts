@@ -1,9 +1,6 @@
 import type { NextRequest } from "next/server";
 import { CACHE_LONG, CACHE_NONE, CACHE_SHORT, json } from "@/lib/cache";
-import { errorMessage } from "@/lib/http";
-import { searchAniList } from "@/lib/providers/anilist";
-import { searchIgdb } from "@/lib/providers/igdb";
-import type { Media, MediaSegment } from "@/lib/types";
+import { searchAll } from "@/lib/search";
 
 const DEFAULT_LIMIT = 5;
 const MAX_LIMIT = 10;
@@ -33,29 +30,7 @@ export async function GET(request: NextRequest) {
 
   const limit = parseLimit(searchParams.get("limit"));
 
-  const searches: Record<MediaSegment, Promise<Media[]>> = {
-    anime: searchAniList(query, "ANIME", limit),
-    manga: searchAniList(query, "MANGA", limit),
-    game: searchIgdb(query, limit),
-  };
-
-  const segments = Object.keys(searches) as MediaSegment[];
-  const settled = await Promise.allSettled(Object.values(searches));
-
-  const results = {} as Record<MediaSegment, Media[]>;
-  const errors: Partial<Record<MediaSegment, string>> = {};
-
-  settled.forEach((result, index) => {
-    const segment = segments[index];
-
-    if (result.status === "fulfilled") {
-      results[segment] = result.value;
-    } else {
-      results[segment] = [];
-      errors[segment] = "Search failed";
-      console.error(`Search failed for ${segment}: ${errorMessage(result.reason)}`);
-    }
-  });
+  const { results, errors } = await searchAll(query, limit);
 
   const hasErrors = Object.keys(errors).length > 0;
 
