@@ -1,6 +1,6 @@
 import type { NextRequest } from "next/server";
 import { CACHE_LONG, CACHE_NONE, CACHE_SHORT, json } from "@/lib/cache";
-import { NotFoundError } from "@/lib/http";
+import { errorMessage, NotFoundError } from "@/lib/http";
 import { getOrFetchMedia } from "@/lib/media";
 import { toMediaType } from "@/lib/types";
 
@@ -19,7 +19,7 @@ export async function GET(_request: NextRequest, ctx: RouteContext<"/api/[type]/
       return json({ error: "Not found" }, CACHE_SHORT, 404);
     }
 
-    console.error(`Failed to load ${type} ${id}`, error);
+    console.error(`Failed to load ${type} ${id}: ${errorMessage(error)}`);
 
     return json({ error: "Failed to load media" }, CACHE_NONE, 502);
   }

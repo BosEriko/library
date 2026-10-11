@@ -16,31 +16,31 @@ const SEARCH_PARAMS = [
 
 const PROFILE_PARAMS = [
   { name: "type", type: "string", required: true, description: "One of anime, manga or game." },
-  { name: "id", type: "integer", required: true, description: "The source id: MyAnimeList id for anime and manga, IGDB id for games." },
+  { name: "id", type: "integer", required: true, description: "The sourceId of a search result." },
 ];
 
 const SCHEMA_FIELDS = [
-  { name: "id", type: "string", description: "Type and source id joined, e.g. ANIME_52991. Also the Firestore document id." },
+  { name: "id", type: "string", description: "Type and source id joined, e.g. ANIME_154587. Also the Firestore document id." },
   { name: "type", type: '"ANIME" | "MANGA" | "GAME"', description: "Media type." },
   { name: "sourceId", type: "string", description: "Id at the source provider." },
   { name: "title", type: "string", description: "Primary title." },
   { name: "altTitles", type: "string[]", description: "Other known titles." },
   { name: "synopsis", type: "string | null", description: "Plot summary or description." },
-  { name: "coverImage", type: "string | null", description: "Cover art. AniList for anime and manga, falling back to MyAnimeList." },
-  { name: "bannerImage", type: "string | null", description: "Wide banner. AniList for anime and manga, IGDB artwork for games." },
+  { name: "coverImage", type: "string | null", description: "Cover art URL." },
+  { name: "bannerImage", type: "string | null", description: "Wide banner or artwork URL." },
   { name: "year", type: "number | null", description: "Year of first release." },
   { name: "status", type: "string | null", description: "Release status as reported by the provider." },
   { name: "genres", type: "string[]", description: "Genres and themes." },
   { name: "score", type: "number | null", description: "Rating normalized to 0–10." },
-  { name: "source", type: "{ provider, url }", description: "Where the data came from: jikan or igdb." },
+  { name: "source", type: "{ provider, url }", description: "The data provider and a link to the original page." },
   { name: "details", type: "object", description: "Type-specific fields, listed below." },
   { name: "createdAt", type: "string", description: "Profile only. ISO date the item was first saved." },
   { name: "updatedAt", type: "string", description: "Profile only. ISO date the item was last refreshed." },
 ];
 
 const DETAILS = [
-  { type: "ANIME", fields: "format, episodes, duration, rating, season, studios, airedFrom, airedTo" },
-  { type: "MANGA", fields: "format, chapters, volumes, authors, serializations, publishedFrom, publishedTo" },
+  { type: "ANIME", fields: "malId, format, episodes, duration, season, studios, airedFrom, airedTo" },
+  { type: "MANGA", fields: "malId, format, chapters, volumes, authors, publishedFrom, publishedTo" },
   { type: "GAME", fields: "platforms, developers, publishers, releaseDate" },
 ];
 
@@ -55,17 +55,17 @@ const SEARCH_RESPONSE = `{
   "results": {
     "anime": [
       {
-        "id": "ANIME_52991",
+        "id": "ANIME_154587",
         "type": "ANIME",
-        "sourceId": "52991",
+        "sourceId": "154587",
         "title": "Sousou no Frieren",
         "altTitles": ["Frieren: Beyond Journey's End"],
-        "coverImage": "https://s4.anilist.co/…/bx154587.jpg",
-        "bannerImage": "https://s4.anilist.co/…/154587.jpg",
+        "coverImage": "https://…/cover.jpg",
+        "bannerImage": "https://…/banner.jpg",
         "year": 2023,
-        "score": 9.3,
-        "source": { "provider": "jikan", "url": "https://myanimelist.net/anime/52991" },
-        "details": { "format": "TV", "episodes": 28, … }
+        "score": 9.1,
+        "source": { "provider": "…", "url": "https://…" },
+        "details": { "malId": 52991, "format": "TV", "episodes": 28, … }
       }
     ],
     "manga": [ … ],
@@ -80,7 +80,7 @@ const PARTIAL_RESPONSE = `{
 }`;
 
 const PROFILE_RESPONSE = `{
-  "id": "ANIME_52991",
+  "id": "ANIME_154587",
   "type": "ANIME",
   "title": "Sousou no Frieren",
   …
@@ -145,8 +145,7 @@ export default function Home() {
           <h1>Library API</h1>
           <p className={styles.lead}>
             Search anime, manga and games from one endpoint, then fetch any result as a profile
-            that follows the same schema. Anime and manga data comes from Jikan with artwork from
-            AniList, and games come from IGDB.
+            that follows the same schema.
           </p>
           <p className={styles.note}>
             The API is public and read-only. All endpoints return JSON and accept <code>GET</code>{" "}
@@ -191,13 +190,13 @@ export default function Home() {
           <Params rows={PROFILE_PARAMS} />
 
           <h3>Example</h3>
-          <Example label="Request">{"curl /api/anime/52991"}</Example>
+          <Example label="Request">{"curl /api/anime/154587"}</Example>
           <Example label="Response">{PROFILE_RESPONSE}</Example>
 
           <p className={styles.note}>
             Use the <code>type</code> and <code>sourceId</code> of a search result to build the
-            profile URL, e.g. <code>ANIME</code> and <code>52991</code> become{" "}
-            <code>/api/anime/52991</code>.
+            profile URL, e.g. <code>ANIME</code> and <code>154587</code> become{" "}
+            <code>/api/anime/154587</code>.
           </p>
         </section>
 

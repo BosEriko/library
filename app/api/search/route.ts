@@ -1,7 +1,8 @@
 import type { NextRequest } from "next/server";
 import { CACHE_LONG, CACHE_NONE, CACHE_SHORT, json } from "@/lib/cache";
+import { errorMessage } from "@/lib/http";
+import { searchAniList } from "@/lib/providers/anilist";
 import { searchIgdb } from "@/lib/providers/igdb";
-import { searchJikan } from "@/lib/providers/jikan";
 import type { Media, MediaSegment } from "@/lib/types";
 
 const DEFAULT_LIMIT = 5;
@@ -33,8 +34,8 @@ export async function GET(request: NextRequest) {
   const limit = parseLimit(searchParams.get("limit"));
 
   const searches: Record<MediaSegment, Promise<Media[]>> = {
-    anime: searchJikan(query, "ANIME", limit),
-    manga: searchJikan(query, "MANGA", limit),
+    anime: searchAniList(query, "ANIME", limit),
+    manga: searchAniList(query, "MANGA", limit),
     game: searchIgdb(query, limit),
   };
 
@@ -52,7 +53,7 @@ export async function GET(request: NextRequest) {
     } else {
       results[segment] = [];
       errors[segment] = "Search failed";
-      console.error(`Search failed for ${segment}`, result.reason);
+      console.error(`Search failed for ${segment}: ${errorMessage(result.reason)}`);
     }
   });
 

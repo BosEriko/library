@@ -18,3 +18,7 @@ export async function fetchJson<T>(url: string, init: RequestInit = {}): Promise
 
   return response.json() as Promise<T>;
 }
+
+export function errorMessage(error: unknown): string {
+  return error instanceof Error ? error.message : String(error);
+}

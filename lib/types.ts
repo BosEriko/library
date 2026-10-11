@@ -25,7 +25,7 @@ export interface Media {
   status: string | null;
   genres: string[];
   score: number | null;
-  source: { provider: "jikan" | "igdb"; url: string };
+  source: { provider: "anilist" | "igdb"; url: string };
   details: Record<string, unknown>;
 }
 
