@@ -3,6 +3,7 @@ import { Geist, Geist_Mono } from "next/font/google";
 import Link from "next/link";
 import "./globals.css";
 import styles from "./layout.module.css";
+import SearchDialog from "./search-dialog";
 
 const geistSans = Geist({
   variable: "--font-geist-sans",
@@ -27,10 +28,7 @@ export default function RootLayout({ children }: LayoutProps<"/">) {
           <Link href="/" className={styles.brand}>
             Library
           </Link>
-          <nav className={styles.nav} aria-label="Main">
-            <Link href="/">Search</Link>
-            <Link href="/docs">Docs</Link>
-          </nav>
+          <SearchDialog />
         </header>
         {children}
       </body>
