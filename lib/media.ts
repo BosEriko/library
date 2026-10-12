@@ -7,6 +7,8 @@ import { mediaId, type Media, type MediaType, type StoredMedia } from "@/lib/typ
 
 const COLLECTION = "media";
 const MAX_AGE_MS = 30 * 24 * 60 * 60 * 1000;
+const COVER_WIDTH = 480;
+const BANNER_WIDTH = 1600;
 
 interface StoredImages {
   coverImage: StoredImage | null;
@@ -37,8 +39,18 @@ function toStoredMedia(doc: MediaDocument): StoredMedia {
 
 async function storeImages(media: Media, previous: StoredImages | undefined): Promise<StoredImages> {
   const [coverImage, bannerImage] = await Promise.all([
-    storeImage(`media/${media.id}/cover`, media.coverImage, previous?.coverImage ?? null),
-    storeImage(`media/${media.id}/banner`, media.bannerImage, previous?.bannerImage ?? null),
+    storeImage(
+      `media/${media.id}/cover`,
+      media.coverImage,
+      COVER_WIDTH,
+      previous?.coverImage ?? null,
+    ),
+    storeImage(
+      `media/${media.id}/banner`,
+      media.bannerImage,
+      BANNER_WIDTH,
+      previous?.bannerImage ?? null,
+    ),
   ]);
 
   return { coverImage, bannerImage };

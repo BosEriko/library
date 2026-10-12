@@ -1,15 +1,9 @@
 import { del, put } from "@vercel/blob";
+import sharp from "sharp";
 import { errorMessage } from "@/lib/http";
 
 const TIMEOUT_MS = 8000;
-
-const EXTENSIONS: Record<string, string> = {
-  "image/jpeg": "jpg",
-  "image/png": "png",
-  "image/webp": "webp",
-  "image/gif": "gif",
-  "image/avif": "avif",
-};
+const QUALITY = 80;
 
 export interface StoredImage {
   url: string;
@@ -28,9 +22,17 @@ async function deleteImage(image: StoredImage): Promise<void> {
   }
 }
 
+async function minimize(image: ArrayBuffer, maxWidth: number): Promise<Buffer> {
+  return sharp(Buffer.from(image))
+    .resize({ width: maxWidth, withoutEnlargement: true })
+    .webp({ quality: QUALITY })
+    .toBuffer();
+}
+
 export async function storeImage(
   path: string,
   source: string | null,
+  maxWidth: number,
   previous: StoredImage | null,
 ): Promise<StoredImage | null> {
   if (previous && previous.source === source) {
@@ -62,10 +64,11 @@ export async function storeImage(
       throw new Error(`Unexpected content type ${contentType}`);
     }
 
-    const blob = await put(`${path}.${EXTENSIONS[contentType] ?? "img"}`, await response.blob(), {
+    const image = await minimize(await response.arrayBuffer(), maxWidth);
+    const blob = await put(`${path}.webp`, image, {
       access: "public",
       addRandomSuffix: true,
-      contentType,
+      contentType: "image/webp",
     });
 
     if (previous) {
