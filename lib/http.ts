@@ -2,6 +2,8 @@ const TIMEOUT_MS = 8000;
 
 export class NotFoundError extends Error {}
 
+export class AdultContentError extends Error {}
+
 export async function fetchJson<T>(url: string, init: RequestInit = {}): Promise<T> {
   const response = await fetch(url, {
     ...init,

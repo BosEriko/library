@@ -21,7 +21,7 @@ const PROFILE_PARAMS = [
 ];
 
 const PROFILE_QUERY_PARAMS = [
-  { name: "adult", type: "boolean", required: false, description: "Set to true to allow 18+ titles. Without it, they return 404 and are not saved." },
+  { name: "adult", type: "boolean", required: false, description: "Set to true to allow 18+ titles. Without it, they return 403 and are not saved." },
 ];
 
 const SCHEMA_FIELDS = [
@@ -52,7 +52,8 @@ const DETAILS = [
 
 const ERRORS = [
   { status: "400", when: "Search was called without q, or q is longer than 100 characters." },
-  { status: "404", when: "Unknown type, non-numeric id, no item with that id, or an 18+ title requested without adult=true." },
+  { status: "403", when: "An 18+ title was requested without adult=true. The body is { \"error\": \"Adult content\" }." },
+  { status: "404", when: "Unknown type, non-numeric id, or no item with that id." },
   { status: "502", when: "The provider or database failed and no saved copy could be returned." },
 ];
 

@@ -3,7 +3,7 @@ import { notFound } from "next/navigation";
 import { connection } from "next/server";
 import { Suspense } from "react";
 import { formatDate, formatScore, humanize } from "@/lib/format";
-import { NotFoundError } from "@/lib/http";
+import { AdultContentError, NotFoundError } from "@/lib/http";
 import { getOrFetchMedia } from "@/lib/media";
 import { toMediaType, type Media, type MediaType, type StoredMedia } from "@/lib/types";
 import styles from "./page.module.css";
@@ -74,7 +74,7 @@ async function loadMedia(type: MediaType, id: string): Promise<StoredMedia> {
   try {
     return await getOrFetchMedia(type, id, false);
   } catch (error) {
-    if (error instanceof NotFoundError) {
+    if (error instanceof NotFoundError || error instanceof AdultContentError) {
       notFound();
     }
 

@@ -1,6 +1,6 @@
 import { Timestamp } from "firebase-admin/firestore";
 import { getDb } from "@/lib/firebase";
-import { NotFoundError } from "@/lib/http";
+import { AdultContentError } from "@/lib/http";
 import { storeImage, type StoredImage } from "@/lib/images";
 import { getAniList } from "@/lib/providers/anilist";
 import { getIgdb } from "@/lib/providers/igdb";
@@ -59,7 +59,7 @@ async function storeImages(media: Media, previous: StoredImages | undefined): Pr
 
 function assertAllowed(media: Media, allowAdult: boolean): void {
   if (media.isAdult && !allowAdult) {
-    throw new NotFoundError(`${media.id} is adult content`);
+    throw new AdultContentError(`${media.id} is adult content`);
   }
 }
 
