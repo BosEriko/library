@@ -40,6 +40,9 @@ export interface SteamMatch {
   type: "GAME";
   sourceId: string;
   title: string;
+  coverImage: string | null;
+  year: number | null;
+  isAdult: boolean;
 }
 
 export function mediaId(type: MediaType, sourceId: string | number): string {

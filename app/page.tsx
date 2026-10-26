@@ -98,7 +98,10 @@ const STEAM_RESPONSE = `{
       "id": "GAME_14593",
       "type": "GAME",
       "sourceId": "14593",
-      "title": "Hollow Knight"
+      "title": "Hollow Knight",
+      "coverImage": "https://images.igdb.com/…/co93cr.jpg",
+      "year": 2017,
+      "isAdult": false
     }
   }
 }`;

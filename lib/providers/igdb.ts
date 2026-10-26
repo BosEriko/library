@@ -99,7 +99,14 @@ async function queryGames(body: string): Promise<IgdbGame[]> {
 
 interface IgdbExternalGame {
   uid: string;
-  game?: { id: number; name: string; game_type?: number };
+  game?: {
+    id: number;
+    name: string;
+    game_type?: number;
+    cover?: IgdbImage;
+    first_release_date?: number;
+    themes?: number[];
+  };
 }
 
 function imageUrl(image: IgdbImage | undefined, size: string): string | null {
@@ -165,7 +172,7 @@ export async function findSteamGames(appIds: string[]): Promise<Record<string, S
   const uids = appIds.map((appId) => `"${appId}"`).join(",");
   const rows = await queryIgdb<IgdbExternalGame>(
     "external_games",
-    `fields uid,game.name,game.game_type; where external_game_source = ${STEAM_SOURCE_ID} & uid = (${uids}); limit 500;`,
+    `fields uid,game.name,game.game_type,game.cover.image_id,game.first_release_date,game.themes; where external_game_source = ${STEAM_SOURCE_ID} & uid = (${uids}); limit 500;`,
   );
   const matches: Record<string, SteamMatch> = {};
   const isMain: Record<string, boolean> = {};
@@ -180,6 +187,11 @@ export async function findSteamGames(appIds: string[]): Promise<Record<string, S
       type: "GAME",
       sourceId: String(game.id),
       title: game.name,
+      coverImage: imageUrl(game.cover, "t_cover_big"),
+      year: game.first_release_date
+        ? new Date(game.first_release_date * 1000).getUTCFullYear()
+        : null,
+      isAdult: (game.themes ?? []).includes(EROTIC_THEME_ID),
     };
     isMain[uid] = main;
   }
