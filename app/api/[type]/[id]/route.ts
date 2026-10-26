@@ -4,7 +4,7 @@ import { errorMessage, NotFoundError } from "@/lib/http";
 import { getOrFetchMedia } from "@/lib/media";
 import { toMediaType } from "@/lib/types";
 
-export async function GET(_request: NextRequest, ctx: RouteContext<"/api/[type]/[id]">) {
+export async function GET(request: NextRequest, ctx: RouteContext<"/api/[type]/[id]">) {
   const { type: segment, id } = await ctx.params;
   const type = toMediaType(segment);
 
@@ -13,7 +13,9 @@ export async function GET(_request: NextRequest, ctx: RouteContext<"/api/[type]/
   }
 
   try {
-    return json(await getOrFetchMedia(type, id), CACHE_LONG);
+    const allowAdult = request.nextUrl.searchParams.get("adult") === "true";
+
+    return json(await getOrFetchMedia(type, id, allowAdult), CACHE_LONG);
   } catch (error) {
     if (error instanceof NotFoundError) {
       return json({ error: "Not found" }, CACHE_SHORT, 404);

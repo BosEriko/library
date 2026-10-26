@@ -22,6 +22,7 @@ const MEDIA_FIELDS = `
   endDate { year month day }
   genres
   averageScore
+  isAdult
   episodes
   duration
   chapters
@@ -30,13 +31,17 @@ const MEDIA_FIELDS = `
   staff(perPage: 10) { edges { role node { name { full } } } }
 `;
 
-const SEARCH_QUERY = `
-  query ($search: String, $type: MediaType, $perPage: Int) {
-    Page(perPage: $perPage) {
-      media(search: $search, type: $type, sort: SEARCH_MATCH) { ${MEDIA_FIELDS} }
+function searchQuery(allowAdult: boolean): string {
+  const adultFilter = allowAdult ? "" : ", isAdult: false";
+
+  return `
+    query ($search: String, $type: MediaType, $perPage: Int) {
+      Page(perPage: $perPage) {
+        media(search: $search, type: $type, sort: SEARCH_MATCH${adultFilter}) { ${MEDIA_FIELDS} }
+      }
     }
-  }
-`;
+  `;
+}
 
 const MEDIA_QUERY = `
   query ($id: Int, $type: MediaType) {
@@ -67,6 +72,7 @@ interface AniListMedia {
   endDate: AniListDate;
   genres: string[];
   averageScore: number | null;
+  isAdult: boolean;
   episodes: number | null;
   duration: number | null;
   chapters: number | null;
@@ -116,6 +122,7 @@ function normalize(media: AniListMedia, type: AniListType): Media {
     status: media.status,
     genres: media.genres,
     score: media.averageScore !== null ? media.averageScore / 10 : null,
+    isAdult: media.isAdult,
     source: { provider: "anilist" as const, url: media.siteUrl },
   };
 
@@ -159,8 +166,9 @@ export async function searchAniList(
   query: string,
   type: AniListType,
   limit: number,
+  allowAdult: boolean,
 ): Promise<Media[]> {
-  const data = await queryAniList<{ Page: { media: AniListMedia[] } }>(SEARCH_QUERY, {
+  const data = await queryAniList<{ Page: { media: AniListMedia[] } }>(searchQuery(allowAdult), {
     search: query,
     type,
     perPage: limit,

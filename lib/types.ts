@@ -25,6 +25,7 @@ export interface Media {
   status: string | null;
   genres: string[];
   score: number | null;
+  isAdult: boolean;
   source: { provider: "anilist" | "igdb"; url: string };
   details: Record<string, unknown>;
 }

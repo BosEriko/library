@@ -8,11 +8,15 @@ export interface SearchResults {
   errors: Partial<Record<MediaSegment, string>>;
 }
 
-export async function searchAll(query: string, limit: number): Promise<SearchResults> {
+export async function searchAll(
+  query: string,
+  limit: number,
+  allowAdult: boolean,
+): Promise<SearchResults> {
   const searches: Record<MediaSegment, Promise<Media[]>> = {
-    anime: searchAniList(query, "ANIME", limit),
-    manga: searchAniList(query, "MANGA", limit),
-    game: searchIgdb(query, limit),
+    anime: searchAniList(query, "ANIME", limit, allowAdult),
+    manga: searchAniList(query, "MANGA", limit, allowAdult),
+    game: searchIgdb(query, limit, allowAdult),
   };
 
   const segments = Object.keys(searches) as MediaSegment[];

@@ -1,5 +1,6 @@
 import { Timestamp } from "firebase-admin/firestore";
 import { getDb } from "@/lib/firebase";
+import { NotFoundError } from "@/lib/http";
 import { storeImage, type StoredImage } from "@/lib/images";
 import { getAniList } from "@/lib/providers/anilist";
 import { getIgdb } from "@/lib/providers/igdb";
@@ -56,12 +57,28 @@ async function storeImages(media: Media, previous: StoredImages | undefined): Pr
   return { coverImage, bannerImage };
 }
 
-export async function getOrFetchMedia(type: MediaType, id: string): Promise<StoredMedia> {
+function assertAllowed(media: Media, allowAdult: boolean): void {
+  if (media.isAdult && !allowAdult) {
+    throw new NotFoundError(`${media.id} is adult content`);
+  }
+}
+
+function isFresh(doc: MediaDocument): boolean {
+  return doc.isAdult !== undefined && Date.now() - doc.updatedAt.toMillis() < MAX_AGE_MS;
+}
+
+export async function getOrFetchMedia(
+  type: MediaType,
+  id: string,
+  allowAdult: boolean,
+): Promise<StoredMedia> {
   const ref = getDb().collection(COLLECTION).doc(mediaId(type, id));
   const snapshot = await ref.get();
   const existing = snapshot.exists ? (snapshot.data() as MediaDocument) : null;
 
-  if (existing && Date.now() - existing.updatedAt.toMillis() < MAX_AGE_MS) {
+  if (existing && isFresh(existing)) {
+    assertAllowed(existing, allowAdult);
+
     return toStoredMedia(existing);
   }
 
@@ -71,11 +88,15 @@ export async function getOrFetchMedia(type: MediaType, id: string): Promise<Stor
     media = await fetchFromProvider(type, id);
   } catch (error) {
     if (existing) {
+      assertAllowed(existing, allowAdult);
+
       return toStoredMedia(existing);
     }
 
     throw error;
   }
+
+  assertAllowed(media, allowAdult);
 
   const images = await storeImages(media, existing?.images);
   const now = Timestamp.now();

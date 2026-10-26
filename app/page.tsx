@@ -12,11 +12,16 @@ const SECTIONS = [
 const SEARCH_PARAMS = [
   { name: "q", type: "string", required: true, description: "Search text, 1–100 characters. Leading and trailing whitespace is trimmed." },
   { name: "limit", type: "integer", required: false, description: "Results per type. Defaults to 5, clamped between 1 and 10." },
+  { name: "adult", type: "boolean", required: false, description: "Set to true to include 18+ titles. They are excluded by default." },
 ];
 
 const PROFILE_PARAMS = [
   { name: "type", type: "string", required: true, description: "One of anime, manga or game." },
   { name: "id", type: "integer", required: true, description: "The sourceId of a search result." },
+];
+
+const PROFILE_QUERY_PARAMS = [
+  { name: "adult", type: "boolean", required: false, description: "Set to true to allow 18+ titles. Without it, they return 404 and are not saved." },
 ];
 
 const SCHEMA_FIELDS = [
@@ -32,6 +37,7 @@ const SCHEMA_FIELDS = [
   { name: "status", type: "string | null", description: "Release status as reported by the provider." },
   { name: "genres", type: "string[]", description: "Genres and themes." },
   { name: "score", type: "number | null", description: "Rating normalized to 0–10." },
+  { name: "isAdult", type: "boolean", description: "Whether the title is 18+. Only true when adult=true was passed." },
   { name: "source", type: "{ provider, url }", description: "The data provider and a link to the original page." },
   { name: "details", type: "object", description: "Type-specific fields, listed below." },
   { name: "createdAt", type: "string", description: "Profile only. ISO date the item was first saved." },
@@ -46,7 +52,7 @@ const DETAILS = [
 
 const ERRORS = [
   { status: "400", when: "Search was called without q, or q is longer than 100 characters." },
-  { status: "404", when: "Unknown type, non-numeric id, or the provider has no item with that id." },
+  { status: "404", when: "Unknown type, non-numeric id, no item with that id, or an 18+ title requested without adult=true." },
   { status: "502", when: "The provider or database failed and no saved copy could be returned." },
 ];
 
@@ -64,6 +70,7 @@ const SEARCH_RESPONSE = `{
         "bannerImage": "https://…/banner.jpg",
         "year": 2023,
         "score": 9.1,
+        "isAdult": false,
         "source": { "provider": "…", "url": "https://…" },
         "details": { "malId": 52991, "format": "TV", "episodes": 28, … }
       }
@@ -188,6 +195,9 @@ export default function Home() {
 
           <h3>Path parameters</h3>
           <Params rows={PROFILE_PARAMS} />
+
+          <h3>Query parameters</h3>
+          <Params rows={PROFILE_QUERY_PARAMS} />
 
           <h3>Example</h3>
           <Example label="Request">{"curl /api/anime/154587"}</Example>

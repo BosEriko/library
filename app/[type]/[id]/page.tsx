@@ -72,7 +72,7 @@ async function loadMedia(type: MediaType, id: string): Promise<StoredMedia> {
   await connection();
 
   try {
-    return await getOrFetchMedia(type, id);
+    return await getOrFetchMedia(type, id, false);
   } catch (error) {
     if (error instanceof NotFoundError) {
       notFound();

@@ -30,7 +30,9 @@ export async function GET(request: NextRequest) {
 
   const limit = parseLimit(searchParams.get("limit"));
 
-  const { results, errors } = await searchAll(query, limit);
+  const allowAdult = searchParams.get("adult") === "true";
+
+  const { results, errors } = await searchAll(query, limit, allowAdult);
 
   const hasErrors = Object.keys(errors).length > 0;
 

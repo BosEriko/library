@@ -8,8 +8,9 @@ export function getDb(): Firestore {
     return firestore;
   }
 
+  const existingApp = getApps()[0];
   const app =
-    getApps()[0] ??
+    existingApp ??
     initializeApp({
       credential: cert({
         projectId: process.env.FIREBASE_PROJECT_ID,
@@ -19,7 +20,10 @@ export function getDb(): Firestore {
     });
 
   firestore = getFirestore(app);
-  firestore.settings({ ignoreUndefinedProperties: true });
+
+  if (!existingApp) {
+    firestore.settings({ ignoreUndefinedProperties: true });
+  }
 
   return firestore;
 }

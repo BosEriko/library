@@ -4,6 +4,7 @@ import { mediaId, type Media } from "@/lib/types";
 const IGDB_URL = "https://api.igdb.com/v4";
 const TOKEN_URL = "https://id.twitch.tv/oauth2/token";
 const IMAGE_URL = "https://images.igdb.com/igdb/image/upload";
+const EROTIC_THEME_ID = 42;
 
 const FIELDS = [
   "name",
@@ -39,7 +40,7 @@ interface IgdbGame {
   screenshots?: IgdbImage[];
   first_release_date?: number;
   genres?: { name: string }[];
-  themes?: { name: string }[];
+  themes?: { id: number; name: string }[];
   total_rating?: number;
   game_status?: { status: string };
   platforms?: { name: string }[];
@@ -112,6 +113,7 @@ function normalize(game: IgdbGame): Media {
     status: game.game_status?.status ?? null,
     genres: [...(game.genres ?? []), ...(game.themes ?? [])].map((genre) => genre.name),
     score: game.total_rating !== undefined ? Math.round(game.total_rating) / 10 : null,
+    isAdult: (game.themes ?? []).some((theme) => theme.id === EROTIC_THEME_ID),
     source: { provider: "igdb", url: game.url ?? `https://www.igdb.com/games/${game.id}` },
     details: {
       platforms: (game.platforms ?? []).map((platform) => platform.name),
@@ -124,9 +126,16 @@ function normalize(game: IgdbGame): Media {
   };
 }
 
-export async function searchIgdb(query: string, limit: number): Promise<Media[]> {
+export async function searchIgdb(
+  query: string,
+  limit: number,
+  allowAdult: boolean,
+): Promise<Media[]> {
   const escaped = query.replace(/\\/g, "\\\\").replace(/"/g, '\\"');
-  const games = await queryGames(`search "${escaped}"; fields ${FIELDS}; limit ${limit};`);
+  const adultFilter = allowAdult ? "" : ` where themes != (${EROTIC_THEME_ID});`;
+  const games = await queryGames(
+    `search "${escaped}"; fields ${FIELDS};${adultFilter} limit ${limit};`,
+  );
 
   return games.map(normalize);
 }
