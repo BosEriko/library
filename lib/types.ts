@@ -35,6 +35,13 @@ export interface StoredMedia extends Media {
   updatedAt: string;
 }
 
+export interface SteamMatch {
+  id: string;
+  type: "GAME";
+  sourceId: string;
+  title: string;
+}
+
 export function mediaId(type: MediaType, sourceId: string | number): string {
   return `${type}_${sourceId}`;
 }

@@ -4,6 +4,7 @@ const SECTIONS = [
   { id: "overview", label: "Overview" },
   { id: "search", label: "Search" },
   { id: "profile", label: "Profile" },
+  { id: "steam", label: "Steam" },
   { id: "schema", label: "Media schema" },
   { id: "caching", label: "Caching" },
   { id: "errors", label: "Errors" },
@@ -22,6 +23,10 @@ const PROFILE_PARAMS = [
 
 const PROFILE_QUERY_PARAMS = [
   { name: "adult", type: "boolean", required: false, description: "Set to true to allow 18+ titles. Without it, they return 403 and are not saved." },
+];
+
+const STEAM_PARAMS = [
+  { name: "ids", type: "string", required: true, description: "1 to 200 comma-separated Steam app ids." },
 ];
 
 const SCHEMA_FIELDS = [
@@ -51,7 +56,7 @@ const DETAILS = [
 ];
 
 const ERRORS = [
-  { status: "400", when: "Search was called without q, or q is longer than 100 characters." },
+  { status: "400", when: "Search was called without q, q is longer than 100 characters, or Steam was called without valid ids." },
   { status: "403", when: "An 18+ title was requested without adult=true. The body is { \"error\": \"Adult content\" }." },
   { status: "404", when: "Unknown type, non-numeric id, or no item with that id." },
   { status: "502", when: "The provider or database failed and no saved copy could be returned." },
@@ -85,6 +90,17 @@ const PARTIAL_RESPONSE = `{
   "query": "frieren",
   "results": { "anime": [ … ], "manga": [ … ], "game": [] },
   "errors": { "game": "Search failed" }
+}`;
+
+const STEAM_RESPONSE = `{
+  "results": {
+    "367520": {
+      "id": "GAME_14593",
+      "type": "GAME",
+      "sourceId": "14593",
+      "title": "Hollow Knight"
+    }
+  }
 }`;
 
 const PROFILE_RESPONSE = `{
@@ -208,6 +224,28 @@ export default function Home() {
             Use the <code>type</code> and <code>sourceId</code> of a search result to build the
             profile URL, e.g. <code>ANIME</code> and <code>154587</code> become{" "}
             <code>/api/anime/154587</code>.
+          </p>
+        </section>
+
+        <section id="steam" className={styles.section}>
+          <h2>Steam</h2>
+          <Endpoint path="/api/steam?ids={appids}" />
+          <p>
+            Matches Steam app ids to games. Each match has the <code>type</code> and{" "}
+            <code>sourceId</code> to load the full game from the profile endpoint. When a Steam id
+            belongs to several games, the main game wins over editions, bundles and DLC. Ids with
+            no match are left out. Matching does not save anything.
+          </p>
+
+          <h3>Query parameters</h3>
+          <Params rows={STEAM_PARAMS} />
+
+          <h3>Example</h3>
+          <Example label="Request">{"curl '/api/steam?ids=367520,999999999'"}</Example>
+          <Example label="Response">{STEAM_RESPONSE}</Example>
+
+          <p className={styles.note}>
+            18+ games are matched like any other. Loading one still needs <code>adult=true</code>.
           </p>
         </section>
 

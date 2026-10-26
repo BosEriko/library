@@ -1,10 +1,12 @@
 import { fetchJson, NotFoundError } from "@/lib/http";
-import { mediaId, type Media } from "@/lib/types";
+import { mediaId, type Media, type SteamMatch } from "@/lib/types";
 
 const IGDB_URL = "https://api.igdb.com/v4";
 const TOKEN_URL = "https://id.twitch.tv/oauth2/token";
 const IMAGE_URL = "https://images.igdb.com/igdb/image/upload";
 const EROTIC_THEME_ID = 42;
+const STEAM_SOURCE_ID = 1;
+const MAIN_GAME_TYPE = 0;
 
 const FIELDS = [
   "name",
@@ -79,8 +81,8 @@ async function getToken(): Promise<string> {
   return token.value;
 }
 
-async function queryGames(body: string): Promise<IgdbGame[]> {
-  return fetchJson<IgdbGame[]>(`${IGDB_URL}/games`, {
+async function queryIgdb<T>(endpoint: string, body: string): Promise<T[]> {
+  return fetchJson<T[]>(`${IGDB_URL}/${endpoint}`, {
     method: "POST",
     headers: {
       "Client-ID": process.env.IGDB_CLIENT_ID ?? "",
@@ -89,6 +91,15 @@ async function queryGames(body: string): Promise<IgdbGame[]> {
     },
     body,
   });
+}
+
+async function queryGames(body: string): Promise<IgdbGame[]> {
+  return queryIgdb<IgdbGame>("games", body);
+}
+
+interface IgdbExternalGame {
+  uid: string;
+  game?: { id: number; name: string; game_type?: number };
 }
 
 function imageUrl(image: IgdbImage | undefined, size: string): string | null {
@@ -148,4 +159,30 @@ export async function getIgdb(id: string): Promise<Media> {
   }
 
   return normalize(game);
+}
+
+export async function findSteamGames(appIds: string[]): Promise<Record<string, SteamMatch>> {
+  const uids = appIds.map((appId) => `"${appId}"`).join(",");
+  const rows = await queryIgdb<IgdbExternalGame>(
+    "external_games",
+    `fields uid,game.name,game.game_type; where external_game_source = ${STEAM_SOURCE_ID} & uid = (${uids}); limit 500;`,
+  );
+  const matches: Record<string, SteamMatch> = {};
+  const isMain: Record<string, boolean> = {};
+
+  for (const { uid, game } of rows) {
+    if (!game) continue;
+    const main = game.game_type === MAIN_GAME_TYPE;
+    if (matches[uid] && (isMain[uid] || !main)) continue;
+
+    matches[uid] = {
+      id: mediaId("GAME", game.id),
+      type: "GAME",
+      sourceId: String(game.id),
+      title: game.name,
+    };
+    isMain[uid] = main;
+  }
+
+  return matches;
 }
