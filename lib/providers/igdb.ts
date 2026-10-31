@@ -1,5 +1,5 @@
 import { fetchJson, NotFoundError } from "@/lib/http";
-import { mediaId, type Media, type SteamMatch } from "@/lib/types";
+import { mediaId, type ListName, type Media, type SteamMatch } from "@/lib/types";
 
 const IGDB_URL = "https://api.igdb.com/v4";
 const TOKEN_URL = "https://id.twitch.tv/oauth2/token";
@@ -7,6 +7,10 @@ const IMAGE_URL = "https://images.igdb.com/igdb/image/upload";
 const EROTIC_THEME_ID = 42;
 const STEAM_SOURCE_ID = 1;
 const MAIN_GAME_TYPE = 0;
+const VISITS_POPULARITY = 1;
+const DAY_SECONDS = 24 * 60 * 60;
+const NEW_RELEASE_DAYS = 90;
+const TOP_MIN_RATINGS = 300;
 
 const FIELDS = [
   "name",
@@ -153,6 +157,55 @@ export async function searchIgdb(
   const adultFilter = allowAdult ? "" : ` where themes != (${EROTIC_THEME_ID});`;
   const games = await queryGames(
     `search "${escaped}"; fields ${FIELDS};${adultFilter} limit ${limit};`,
+  );
+
+  return games.map(normalize);
+}
+
+async function trendingGames(limit: number, filters: string[]): Promise<IgdbGame[]> {
+  const popular = await queryIgdb<{ game_id: number }>(
+    "popularity_primitives",
+    `fields game_id,value; where popularity_type = ${VISITS_POPULARITY}; sort value desc; limit ${limit * 3};`,
+  );
+  const ids = [...new Set(popular.map((row) => row.game_id))];
+
+  if (ids.length === 0) {
+    return [];
+  }
+
+  const games = await queryGames(
+    `fields ${FIELDS}; where id = (${ids.join(",")}) & ${filters.join(" & ")}; limit ${ids.length};`,
+  );
+  const byId = new Map(games.map((game) => [game.id, game]));
+
+  return ids.flatMap((id) => byId.get(id) ?? []).slice(0, limit);
+}
+
+export async function listIgdb(
+  list: ListName,
+  limit: number,
+  allowAdult: boolean,
+): Promise<Media[]> {
+  const now = Math.floor(Date.now() / 1000);
+  const filters = [
+    `game_type = ${MAIN_GAME_TYPE}`,
+    ...(allowAdult ? [] : [`themes != (${EROTIC_THEME_ID})`]),
+  ];
+
+  if (list === "trending") {
+    return (await trendingGames(limit, filters)).map(normalize);
+  }
+
+  const { where, sort } = {
+    season: {
+      where: [`first_release_date >= ${now - NEW_RELEASE_DAYS * DAY_SECONDS}`, `first_release_date <= ${now}`],
+      sort: "hypes desc",
+    },
+    top: { where: [`total_rating_count >= ${TOP_MIN_RATINGS}`], sort: "total_rating desc" },
+    upcoming: { where: [`first_release_date > ${now}`], sort: "hypes desc" },
+  }[list];
+  const games = await queryGames(
+    `fields ${FIELDS}; where ${[...where, ...filters].join(" & ")}; sort ${sort}; limit ${limit};`,
   );
 
   return games.map(normalize);

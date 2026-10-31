@@ -4,6 +4,10 @@ export const CACHE_LONG = `public, s-maxage=${ONE_DAY * 7}, stale-while-revalida
 export const CACHE_SHORT = "public, s-maxage=60";
 export const CACHE_NONE = "no-store";
 
+export function cacheFor(seconds: number): string {
+  return `public, s-maxage=${Math.max(60, Math.floor(seconds))}, stale-while-revalidate=3600`;
+}
+
 export function json(body: unknown, cacheControl: string, status = 200): Response {
   return Response.json(body, {
     status,

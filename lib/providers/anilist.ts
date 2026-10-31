@@ -1,5 +1,5 @@
 import { fetchJson, NotFoundError } from "@/lib/http";
-import { mediaId, type Media } from "@/lib/types";
+import { mediaId, type ListName, type Media } from "@/lib/types";
 
 const ANILIST_URL = "https://graphql.anilist.co";
 
@@ -41,6 +41,63 @@ function searchQuery(allowAdult: boolean): string {
       }
     }
   `;
+}
+
+function listQuery(allowAdult: boolean): string {
+  const adultFilter = allowAdult ? "" : ", isAdult: false";
+
+  return `
+    query (
+      $type: MediaType
+      $perPage: Int
+      $sort: [MediaSort]
+      $season: MediaSeason
+      $seasonYear: Int
+      $status: MediaStatus
+      $startDate: FuzzyDateInt
+    ) {
+      Page(perPage: $perPage) {
+        media(
+          type: $type
+          sort: $sort
+          season: $season
+          seasonYear: $seasonYear
+          status: $status
+          startDate_greater: $startDate${adultFilter}
+        ) { ${MEDIA_FIELDS} }
+      }
+    }
+  `;
+}
+
+const SEASONS = ["WINTER", "SPRING", "SUMMER", "FALL"] as const;
+const NEW_SERIES_DAYS = 180;
+
+function fuzzyDate(date: Date): number {
+  return date.getUTCFullYear() * 10000 + (date.getUTCMonth() + 1) * 100 + date.getUTCDate();
+}
+
+function listVariables(list: ListName, type: AniListType, now: Date): Record<string, unknown> {
+  switch (list) {
+    case "trending":
+      return { sort: ["TRENDING_DESC", "POPULARITY_DESC"] };
+    case "top":
+      return { sort: ["SCORE_DESC", "POPULARITY_DESC"] };
+    case "upcoming":
+      return { status: "NOT_YET_RELEASED", sort: ["POPULARITY_DESC"] };
+    case "season":
+      return type === "ANIME"
+        ? {
+            season: SEASONS[Math.floor(now.getUTCMonth() / 3)],
+            seasonYear: now.getUTCFullYear(),
+            sort: ["POPULARITY_DESC"],
+          }
+        : {
+            status: "RELEASING",
+            startDate: fuzzyDate(new Date(now.getTime() - NEW_SERIES_DAYS * 24 * 60 * 60 * 1000)),
+            sort: ["POPULARITY_DESC"],
+          };
+  }
 }
 
 const MEDIA_QUERY = `
@@ -172,6 +229,21 @@ export async function searchAniList(
     search: query,
     type,
     perPage: limit,
+  });
+
+  return data.Page.media.map((media) => normalize(media, type));
+}
+
+export async function listAniList(
+  type: AniListType,
+  list: ListName,
+  limit: number,
+  allowAdult: boolean,
+): Promise<Media[]> {
+  const data = await queryAniList<{ Page: { media: AniListMedia[] } }>(listQuery(allowAdult), {
+    type,
+    perPage: limit,
+    ...listVariables(list, type, new Date()),
   });
 
   return data.Page.media.map((media) => normalize(media, type));

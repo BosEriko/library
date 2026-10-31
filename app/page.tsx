@@ -5,6 +5,7 @@ const SECTIONS = [
   { id: "search", label: "Search" },
   { id: "profile", label: "Profile" },
   { id: "steam", label: "Steam" },
+  { id: "lists", label: "Lists" },
   { id: "schema", label: "Media schema" },
   { id: "caching", label: "Caching" },
   { id: "errors", label: "Errors" },
@@ -27,6 +28,22 @@ const PROFILE_QUERY_PARAMS = [
 
 const STEAM_PARAMS = [
   { name: "ids", type: "string", required: true, description: "1 to 200 comma-separated Steam app ids." },
+];
+
+const LIST_PARAMS = [
+  { name: "type", type: "string", required: true, description: "One of anime, manga or game." },
+  { name: "list", type: "string", required: true, description: "One of trending, season, top or upcoming." },
+];
+
+const LIST_QUERY_PARAMS = [
+  { name: "adult", type: "boolean", required: false, description: "Set to true to include 18+ titles. They are excluded by default, and each version is cached separately." },
+];
+
+const LISTS = [
+  { list: "trending", anime: "Trending on AniList right now.", manga: "Trending on AniList right now.", game: "Most visited on IGDB right now." },
+  { list: "season", anime: "This season's anime, most popular first.", manga: "Series that started in the last 6 months and are still running, most popular first.", game: "Released in the last 90 days, most anticipated first." },
+  { list: "top", anime: "Highest rated of all time.", manga: "Highest rated of all time.", game: "Highest rated of all time, from games with at least 300 ratings." },
+  { list: "upcoming", anime: "Not yet released, most popular first.", manga: "Not yet released, most popular first.", game: "Not yet released, most anticipated first." },
 ];
 
 const SCHEMA_FIELDS = [
@@ -58,7 +75,7 @@ const DETAILS = [
 const ERRORS = [
   { status: "400", when: "Search was called without q, q is longer than 100 characters, or Steam was called without valid ids." },
   { status: "403", when: "An 18+ title was requested without adult=true. The body is { \"error\": \"Adult content\" }." },
-  { status: "404", when: "Unknown type, non-numeric id, or no item with that id." },
+  { status: "404", when: "Unknown type or list, non-numeric id, or no item with that id." },
   { status: "502", when: "The provider or database failed and no saved copy could be returned." },
 ];
 
@@ -104,6 +121,23 @@ const STEAM_RESPONSE = `{
       "isAdult": false
     }
   }
+}`;
+
+const LIST_RESPONSE = `{
+  "type": "ANIME",
+  "list": "top",
+  "items": [
+    {
+      "id": "ANIME_154587",
+      "type": "ANIME",
+      "sourceId": "154587",
+      "title": "Sousou no Frieren",
+      "score": 9.1,
+      …
+    },
+    …
+  ],
+  "updatedAt": "2026-10-31T08:00:00.000Z"
 }`;
 
 const PROFILE_RESPONSE = `{
@@ -252,6 +286,55 @@ export default function Home() {
           </p>
         </section>
 
+        <section id="lists" className={styles.section}>
+          <h2>Lists</h2>
+          <Endpoint path="/api/lists/{type}/{list}" />
+          <p>
+            Returns up to 20 titles for a ready-made list, such as what&apos;s trending or the
+            highest rated. Items follow the media schema, so any of them can be opened with the
+            profile endpoint.
+          </p>
+
+          <h3>Path parameters</h3>
+          <Params rows={LIST_PARAMS} />
+
+          <h3>Query parameters</h3>
+          <Params rows={LIST_QUERY_PARAMS} />
+
+          <h3>What each list contains</h3>
+          <table className={styles.table}>
+            <thead>
+              <tr>
+                <th scope="col">List</th>
+                <th scope="col">Anime</th>
+                <th scope="col">Manga</th>
+                <th scope="col">Game</th>
+              </tr>
+            </thead>
+            <tbody>
+              {LISTS.map((row) => (
+                <tr key={row.list}>
+                  <td>
+                    <code className={styles.name}>{row.list}</code>
+                  </td>
+                  <td>{row.anime}</td>
+                  <td>{row.manga}</td>
+                  <td>{row.game}</td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+
+          <h3>Example</h3>
+          <Example label="Request">{"curl /api/lists/anime/top"}</Example>
+          <Example label="Response">{LIST_RESPONSE}</Example>
+
+          <p className={styles.note}>
+            Lists are rebuilt from the provider once a day. <code>updatedAt</code> says when the
+            current copy was made.
+          </p>
+        </section>
+
         <section id="schema" className={styles.section}>
           <h2>Media schema</h2>
           <p>Search results and profiles share the same shape for every type.</p>
@@ -314,6 +397,12 @@ export default function Home() {
             </li>
           </ul>
           <p>Data can therefore be up to about 37 days old.</p>
+          <p>
+            <strong>Lists, 1 day.</strong> Each list is saved to Firestore and rebuilt from the
+            provider once the saved copy is a day old. The CDN keeps a list only until that copy is
+            due, so lists are never more than about a day old. If the provider is unavailable, the
+            older copy is returned and cached for a minute.
+          </p>
         </section>
 
         <section id="errors" className={styles.section}>
