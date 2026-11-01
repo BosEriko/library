@@ -4,7 +4,6 @@ coverage
 .git
 .github
 .env*
-!.env.example
 *.log
 *.tsbuildinfo
 fly.toml

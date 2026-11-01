@@ -4,6 +4,8 @@ This is a [Next.js](https://nextjs.org) project bootstrapped with [`create-next-
 
 This project uses [pnpm](https://pnpm.io). Installing with npm or yarn is blocked.
 
+Copy `example.env` to `.env.local` and replace each `XXXX` with a real value. The storage and Redis lines are optional locally: delete them to skip image uploads and the Redis cache.
+
 Install dependencies and run the development server:
 
 ```bash
