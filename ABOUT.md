@@ -6,4 +6,4 @@ Search anime, manga and games from one place and open any title as a full profil
 
 ## Website
 
-https://library-boseriko.vercel.app
+https://library.boseriko.com
