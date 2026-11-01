@@ -1,6 +1,8 @@
+import { REDIS_TTL_SECONDS } from "@/lib/cache";
 import { errorMessage } from "@/lib/http";
 import { searchAniList } from "@/lib/providers/anilist";
 import { searchIgdb } from "@/lib/providers/igdb";
+import { getCached, setCached } from "@/lib/redis";
 import type { Media, MediaSegment } from "@/lib/types";
 
 export interface SearchResults {
@@ -8,7 +10,7 @@ export interface SearchResults {
   errors: Partial<Record<MediaSegment, string>>;
 }
 
-export async function searchAll(
+async function fetchAll(
   query: string,
   limit: number,
   allowAdult: boolean,
@@ -38,4 +40,25 @@ export async function searchAll(
   });
 
   return { results, errors };
+}
+
+export async function searchAll(
+  query: string,
+  limit: number,
+  allowAdult: boolean,
+): Promise<SearchResults> {
+  const key = `search:${allowAdult ? "adult" : "safe"}:${limit}:${query.toLowerCase()}`;
+  const [hit] = await getCached<SearchResults>([key]);
+
+  if (hit) {
+    return hit;
+  }
+
+  const search = await fetchAll(query, limit, allowAdult);
+
+  if (Object.keys(search.errors).length === 0) {
+    await setCached([[key, search]], REDIS_TTL_SECONDS);
+  }
+
+  return search;
 }

@@ -28,7 +28,7 @@ You can check out [the Next.js GitHub repository](https://github.com/vercel/next
 
 ## Deploying
 
-The app runs on [Fly.io](https://fly.io) as `library-boseriko` (see `fly.toml` and `Dockerfile`). Images are stored in a public [Tigris](https://www.tigrisdata.com) bucket, and Cloudflare sits in front of the site to cache API responses.
+The app runs on [Fly.io](https://fly.io) as `library-boseriko` (see `fly.toml` and `Dockerfile`). Images are stored in a public [Tigris](https://www.tigrisdata.com) bucket, and search and Steam results are cached in [Upstash Redis](https://fly.io/docs/upstash/redis/).
 
 ### First deploy
 
@@ -44,32 +44,35 @@ The app runs on [Fly.io](https://fly.io) as `library-boseriko` (see `fly.toml` a
    fly storage create --public --name library-boseriko-media -a library-boseriko
    ```
 
-3. Set the remaining secrets. `STORAGE_PUBLIC_URL` is the bucket's public address, with no trailing slash:
+3. Create a Redis database in the same region as the app, and copy the private URL it prints (`redis://default:...@fly-library-boseriko-redis.upstash.io:6379`):
+
+   ```bash
+   fly redis create --name library-boseriko-redis --region sin --no-replicas --enable-eviction
+   ```
+
+4. Set the remaining secrets. `STORAGE_PUBLIC_URL` is the bucket's public address, with no trailing slash:
 
    ```bash
    fly secrets set -a library-boseriko \
      STORAGE_PUBLIC_URL=https://library-boseriko-media.t3.tigrisfiles.io \
+     REDIS_URL="redis://default:...@fly-library-boseriko-redis.upstash.io:6379" \
      FIREBASE_PROJECT_ID=... FIREBASE_CLIENT_EMAIL=... FIREBASE_PRIVATE_KEY="..." \
      IGDB_CLIENT_ID=... IGDB_CLIENT_SECRET=...
    ```
 
-4. Deploy:
+5. Deploy:
 
    ```bash
    fly deploy
    ```
 
-### Domain and caching
+### Domain
 
-1. Add a certificate for the domain, then create the DNS records Fly prints in Cloudflare:
+Add a certificate for the domain, then point `library.boseriko.com` at the A and AAAA records Fly prints:
 
-   ```bash
-   fly certs add library.boseriko.com -a library-boseriko
-   ```
-
-2. Turn on the Cloudflare proxy for `library.boseriko.com` once the certificate is issued.
-3. In Cloudflare, add a **Cache Rule** for `library.boseriko.com/api/*` that makes requests **eligible for cache** and uses the **origin's cache-control headers**. Fly doesn't cache responses, so without this rule every request reaches AniList and IGDB. Cloudflare doesn't cache JSON on its own.
-4. Check that a repeated API request returns `cf-cache-status: HIT`.
+```bash
+fly certs add library.boseriko.com -a library-boseriko
+```
 
 ### Later deploys
 

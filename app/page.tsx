@@ -383,25 +383,27 @@ export default function Home() {
 
         <section id="caching" className={styles.section}>
           <h2>Caching</h2>
-          <p>There are two layers of caching.</p>
           <ul className={styles.list}>
             <li>
-              <strong>CDN, 7 days.</strong> Successful responses are cached at the edge for 7 days,
-              keyed by the full URL. Note that <code>q=Naruto</code> and <code>q=naruto</code> are
-              cached separately.
+              <strong>Search and Steam, 7 days.</strong> Results are cached in Redis. Search ignores
+              letter case, so <code>q=Naruto</code> and <code>q=naruto</code> share a result, and
+              Steam app ids are cached one by one, including ids with no match. A search where any
+              provider failed is not cached.
             </li>
             <li>
-              <strong>Firestore, 30 days.</strong> Profiles are refreshed from the provider once the
-              saved copy is older than 30 days. If the provider is unavailable, the older copy is
-              returned instead.
+              <strong>Profiles, 30 days.</strong> Profiles are saved to Firestore and refreshed from
+              the provider once the saved copy is older than 30 days. If the provider is
+              unavailable, the older copy is returned instead.
+            </li>
+            <li>
+              <strong>Lists, 1 day.</strong> Each list is saved to Firestore and rebuilt from the
+              provider once the saved copy is a day old. If the provider is unavailable, the older
+              copy is returned.
             </li>
           </ul>
-          <p>Data can therefore be up to about 37 days old.</p>
           <p>
-            <strong>Lists, 1 day.</strong> Each list is saved to Firestore and rebuilt from the
-            provider once the saved copy is a day old. The CDN keeps a list only until that copy is
-            due, so lists are never more than about a day old. If the provider is unavailable, the
-            older copy is returned and cached for a minute.
+            Every response also sends a <code>Cache-Control</code> header, so browsers and any CDN in
+            front of the API can keep it for the same time.
           </p>
         </section>
 
