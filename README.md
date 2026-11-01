@@ -81,3 +81,13 @@ fly certs add library.boseriko.com -a library-boseriko
 ```bash
 fly deploy
 ```
+
+### Cleaning up images
+
+Images that no profile uses anymore stay in the bucket, for example after deleting Firestore entries. List them with:
+
+```bash
+pnpm storage:clean
+```
+
+Then delete them with `pnpm storage:clean --delete`. Files uploaded in the last 10 minutes are skipped, so a profile that is being saved isn't affected. This uses the storage and Firebase values in `.env.local`, which point at production.

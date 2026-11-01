@@ -1,7 +1,7 @@
 import { Timestamp } from "firebase-admin/firestore";
 import { getDb } from "@/lib/firebase";
 import { AdultContentError } from "@/lib/http";
-import { storeImage, type StoredImage } from "@/lib/images";
+import { deleteImage, storeImage, type StoredImage } from "@/lib/images";
 import { getAniList } from "@/lib/providers/anilist";
 import { getIgdb } from "@/lib/providers/igdb";
 import { mediaId, type Media, type MediaType, type StoredMedia } from "@/lib/types";
@@ -57,6 +57,18 @@ async function storeImages(media: Media, previous: StoredImages | undefined): Pr
   return { coverImage, bannerImage };
 }
 
+async function deleteReplacedImages(
+  previous: StoredImages | undefined,
+  current: StoredImages,
+): Promise<void> {
+  const replaced = [
+    previous?.coverImage?.url !== current.coverImage?.url ? previous?.coverImage : null,
+    previous?.bannerImage?.url !== current.bannerImage?.url ? previous?.bannerImage : null,
+  ].filter((image): image is StoredImage => Boolean(image));
+
+  await Promise.all(replaced.map(deleteImage));
+}
+
 function assertAllowed(media: Media, allowAdult: boolean): void {
   if (media.isAdult && !allowAdult) {
     throw new AdultContentError(`${media.id} is adult content`);
@@ -110,6 +122,7 @@ export async function getOrFetchMedia(
   };
 
   await ref.set(document);
+  await deleteReplacedImages(existing?.images, images);
 
   return toStoredMedia(document);
 }

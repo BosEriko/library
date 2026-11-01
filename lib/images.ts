@@ -42,7 +42,7 @@ function keyFor(url: string): string | null {
   return url.startsWith(prefix) ? url.slice(prefix.length) : null;
 }
 
-async function deleteImage(image: StoredImage): Promise<void> {
+export async function deleteImage(image: StoredImage): Promise<void> {
   const key = keyFor(image.url);
 
   if (!key) {
@@ -78,10 +78,6 @@ export async function storeImage(
   }
 
   if (!source) {
-    if (previous) {
-      await deleteImage(previous);
-    }
-
     return null;
   }
 
@@ -110,10 +106,6 @@ export async function storeImage(
         CacheControl: "public, max-age=31536000, immutable",
       }),
     );
-
-    if (previous) {
-      await deleteImage(previous);
-    }
 
     return { url: `${process.env.STORAGE_PUBLIC_URL}/${key}`, source };
   } catch (error) {
