@@ -48,7 +48,7 @@ The app runs on [Fly.io](https://fly.io) as `library-boseriko` (see `fly.toml` a
 
    ```bash
    fly secrets set -a library-boseriko \
-     STORAGE_PUBLIC_URL=https://library-boseriko-media.fly.storage.tigris.dev \
+     STORAGE_PUBLIC_URL=https://library-boseriko-media.t3.tigrisfiles.io \
      FIREBASE_PROJECT_ID=... FIREBASE_CLIENT_EMAIL=... FIREBASE_PRIVATE_KEY="..." \
      IGDB_CLIENT_ID=... IGDB_CLIENT_SECRET=...
    ```
