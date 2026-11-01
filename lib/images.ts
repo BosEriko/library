@@ -1,4 +1,5 @@
-import { del, put } from "@vercel/blob";
+import { DeleteObjectCommand, PutObjectCommand, S3Client } from "@aws-sdk/client-s3";
+import { randomUUID } from "node:crypto";
 import sharp from "sharp";
 import { errorMessage } from "@/lib/http";
 
@@ -10,13 +11,46 @@ export interface StoredImage {
   source: string;
 }
 
-function isBlobConfigured(): boolean {
-  return Boolean(process.env.BLOB_READ_WRITE_TOKEN || process.env.BLOB_STORE_ID);
+let client: S3Client | null = null;
+
+function isStorageConfigured(): boolean {
+  return Boolean(
+    process.env.AWS_ACCESS_KEY_ID &&
+      process.env.AWS_SECRET_ACCESS_KEY &&
+      process.env.BUCKET_NAME &&
+      process.env.STORAGE_PUBLIC_URL,
+  );
+}
+
+function getClient(): S3Client {
+  client ??= new S3Client({
+    endpoint: process.env.AWS_ENDPOINT_URL_S3,
+    region: process.env.AWS_REGION,
+    forcePathStyle: true,
+    credentials: {
+      accessKeyId: process.env.AWS_ACCESS_KEY_ID!,
+      secretAccessKey: process.env.AWS_SECRET_ACCESS_KEY!,
+    },
+  });
+
+  return client;
+}
+
+function keyFor(url: string): string | null {
+  const prefix = `${process.env.STORAGE_PUBLIC_URL}/`;
+
+  return url.startsWith(prefix) ? url.slice(prefix.length) : null;
 }
 
 async function deleteImage(image: StoredImage): Promise<void> {
+  const key = keyFor(image.url);
+
+  if (!key) {
+    return;
+  }
+
   try {
-    await del(image.url);
+    await getClient().send(new DeleteObjectCommand({ Bucket: process.env.BUCKET_NAME, Key: key }));
   } catch (error) {
     console.warn(`Failed to delete image ${image.url}: ${errorMessage(error)}`);
   }
@@ -35,11 +69,11 @@ export async function storeImage(
   maxWidth: number,
   previous: StoredImage | null,
 ): Promise<StoredImage | null> {
-  if (previous && previous.source === source) {
+  if (previous && previous.source === source && keyFor(previous.url)) {
     return previous;
   }
 
-  if (!isBlobConfigured()) {
+  if (!isStorageConfigured()) {
     return previous;
   }
 
@@ -65,17 +99,23 @@ export async function storeImage(
     }
 
     const image = await minimize(await response.arrayBuffer(), maxWidth);
-    const blob = await put(`${path}.webp`, image, {
-      access: "public",
-      addRandomSuffix: true,
-      contentType: "image/webp",
-    });
+    const key = `${path}-${randomUUID()}.webp`;
+
+    await getClient().send(
+      new PutObjectCommand({
+        Bucket: process.env.BUCKET_NAME,
+        Key: key,
+        Body: image,
+        ContentType: "image/webp",
+        CacheControl: "public, max-age=31536000, immutable",
+      }),
+    );
 
     if (previous) {
       await deleteImage(previous);
     }
 
-    return { url: blob.url, source };
+    return { url: `${process.env.STORAGE_PUBLIC_URL}/${key}`, source };
   } catch (error) {
     console.warn(`Failed to store image ${source}: ${errorMessage(error)}`);
 

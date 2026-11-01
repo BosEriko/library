@@ -1,0 +1,12 @@
+node_modules
+.next
+coverage
+.git
+.github
+.env*
+!.env.example
+*.log
+*.tsbuildinfo
+fly.toml
+Dockerfile
+.dockerignore
