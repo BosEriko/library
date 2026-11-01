@@ -41,14 +41,14 @@ The app runs on [Fly.io](https://fly.io) as `library-boseriko` (see `fly.toml` a
 2. Create a public image bucket. This also sets the `AWS_*` and `BUCKET_NAME` secrets on the app:
 
    ```bash
-   fly storage create --public --name library-boseriko -a library-boseriko
+   fly storage create --public --name library-boseriko-media -a library-boseriko
    ```
 
 3. Set the remaining secrets. `STORAGE_PUBLIC_URL` is the bucket's public address, with no trailing slash:
 
    ```bash
    fly secrets set -a library-boseriko \
-     STORAGE_PUBLIC_URL=https://library-boseriko.fly.storage.tigris.dev \
+     STORAGE_PUBLIC_URL=https://library-boseriko-media.fly.storage.tigris.dev \
      FIREBASE_PROJECT_ID=... FIREBASE_CLIENT_EMAIL=... FIREBASE_PRIVATE_KEY="..." \
      IGDB_CLIENT_ID=... IGDB_CLIENT_SECRET=...
    ```
