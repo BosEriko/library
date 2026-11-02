@@ -1,0 +1,35 @@
+import type { NextRequest } from "next/server";
+import { CACHE_NONE } from "@/lib/cache";
+import { increment } from "@/lib/redis";
+
+export const RATE_LIMIT = 60;
+const WINDOW_SECONDS = 60;
+
+function clientIp(request: NextRequest): string {
+  return (
+    request.headers.get("fly-client-ip") ??
+    request.headers.get("x-forwarded-for")?.split(",")[0]?.trim() ??
+    "unknown"
+  );
+}
+
+export async function rateLimit(request: NextRequest): Promise<Response | null> {
+  const now = Math.floor(Date.now() / 1000);
+  const window = Math.floor(now / WINDOW_SECONDS);
+  const count = await increment(`ratelimit:${clientIp(request)}:${window}`, WINDOW_SECONDS);
+
+  if (count === null || count <= RATE_LIMIT) {
+    return null;
+  }
+
+  return Response.json(
+    { error: "Too many requests" },
+    {
+      status: 429,
+      headers: {
+        "Cache-Control": CACHE_NONE,
+        "Retry-After": String(WINDOW_SECONDS - (now % WINDOW_SECONDS)),
+      },
+    },
+  );
+}

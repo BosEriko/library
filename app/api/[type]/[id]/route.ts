@@ -3,8 +3,15 @@ import { CACHE_LONG, CACHE_NONE, CACHE_SHORT, json } from "@/lib/cache";
 import { AdultContentError, errorMessage, NotFoundError } from "@/lib/http";
 import { getOrFetchMedia } from "@/lib/media";
 import { toMediaType } from "@/lib/types";
+import { rateLimit } from "@/lib/rate-limit";
 
 export async function GET(request: NextRequest, ctx: RouteContext<"/api/[type]/[id]">) {
+  const limited = await rateLimit(request);
+
+  if (limited) {
+    return limited;
+  }
+
   const { type: segment, id } = await ctx.params;
   const type = toMediaType(segment);
 

@@ -3,8 +3,15 @@ import { cacheFor, CACHE_NONE, CACHE_SHORT, json } from "@/lib/cache";
 import { errorMessage } from "@/lib/http";
 import { getOrFetchList, LIST_MAX_AGE_MS } from "@/lib/lists";
 import { toListName, toMediaType } from "@/lib/types";
+import { rateLimit } from "@/lib/rate-limit";
 
 export async function GET(request: NextRequest, ctx: RouteContext<"/api/lists/[type]/[list]">) {
+  const limited = await rateLimit(request);
+
+  if (limited) {
+    return limited;
+  }
+
   const { type: segment, list: name } = await ctx.params;
   const type = toMediaType(segment);
   const list = toListName(name);

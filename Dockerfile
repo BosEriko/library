@@ -13,7 +13,6 @@ ENV NODE_ENV=production
 RUN apt-get update && apt-get install -y --no-install-recommends ca-certificates && rm -rf /var/lib/apt/lists/*
 COPY --from=build /app/package.json /app/next.config.ts ./
 COPY --from=build /app/node_modules ./node_modules
-COPY --from=build /app/public ./public
 COPY --from=build /app/.next ./.next
 EXPOSE 3000
 CMD ["node_modules/.bin/next", "start"]

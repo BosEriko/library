@@ -1,15 +1,18 @@
-import { Timestamp } from "firebase-admin/firestore";
+import { Timestamp, type DocumentReference } from "firebase-admin/firestore";
+import { after } from "next/server";
 import { getDb } from "@/lib/firebase";
-import { AdultContentError } from "@/lib/http";
+import { AdultContentError, errorMessage } from "@/lib/http";
 import { deleteImage, storeImage, type StoredImage } from "@/lib/images";
 import { getAniList } from "@/lib/providers/anilist";
 import { getIgdb } from "@/lib/providers/igdb";
+import { acquireLock } from "@/lib/redis";
 import { mediaId, type Media, type MediaType, type StoredMedia } from "@/lib/types";
 
 const COLLECTION = "media";
 const MAX_AGE_MS = 30 * 24 * 60 * 60 * 1000;
 const COVER_WIDTH = 480;
 const BANNER_WIDTH = 1600;
+const REFRESH_LOCK_SECONDS = 60;
 
 interface StoredImages {
   coverImage: StoredImage | null;
@@ -79,6 +82,45 @@ function isFresh(doc: MediaDocument): boolean {
   return doc.isAdult !== undefined && Date.now() - doc.updatedAt.toMillis() < MAX_AGE_MS;
 }
 
+async function saveMedia(
+  ref: DocumentReference,
+  media: Media,
+  existing: MediaDocument | null,
+): Promise<MediaDocument> {
+  const images = await storeImages(media, existing?.images);
+  const now = Timestamp.now();
+  const document: MediaDocument = {
+    ...media,
+    coverImage: images.coverImage?.url ?? media.coverImage,
+    bannerImage: images.bannerImage?.url ?? media.bannerImage,
+    images,
+    createdAt: existing?.createdAt ?? now,
+    updatedAt: now,
+  };
+
+  await ref.set(document);
+  await deleteReplacedImages(existing?.images, images);
+
+  return document;
+}
+
+async function refreshInBackground(
+  ref: DocumentReference,
+  type: MediaType,
+  id: string,
+  existing: MediaDocument,
+): Promise<void> {
+  if (!(await acquireLock(`refresh:${mediaId(type, id)}`, REFRESH_LOCK_SECONDS))) {
+    return;
+  }
+
+  try {
+    await saveMedia(ref, await fetchFromProvider(type, id), existing);
+  } catch (error) {
+    console.warn(`Background refresh of ${mediaId(type, id)} failed: ${errorMessage(error)}`);
+  }
+}
+
 export async function getOrFetchMedia(
   type: MediaType,
   id: string,
@@ -90,6 +132,13 @@ export async function getOrFetchMedia(
 
   if (existing && isFresh(existing)) {
     assertAllowed(existing, allowAdult);
+
+    return toStoredMedia(existing);
+  }
+
+  if (existing && existing.isAdult !== undefined) {
+    assertAllowed(existing, allowAdult);
+    after(() => refreshInBackground(ref, type, id, existing));
 
     return toStoredMedia(existing);
   }
@@ -110,19 +159,5 @@ export async function getOrFetchMedia(
 
   assertAllowed(media, allowAdult);
 
-  const images = await storeImages(media, existing?.images);
-  const now = Timestamp.now();
-  const document: MediaDocument = {
-    ...media,
-    coverImage: images.coverImage?.url ?? media.coverImage,
-    bannerImage: images.bannerImage?.url ?? media.bannerImage,
-    images,
-    createdAt: existing?.createdAt ?? now,
-    updatedAt: now,
-  };
-
-  await ref.set(document);
-  await deleteReplacedImages(existing?.images, images);
-
-  return toStoredMedia(document);
+  return toStoredMedia(await saveMedia(ref, media, existing));
 }

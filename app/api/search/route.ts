@@ -1,6 +1,7 @@
 import type { NextRequest } from "next/server";
 import { CACHE_LONG, CACHE_NONE, CACHE_SHORT, json } from "@/lib/cache";
 import { searchAll } from "@/lib/search";
+import { rateLimit } from "@/lib/rate-limit";
 
 const DEFAULT_LIMIT = 5;
 const MAX_LIMIT = 10;
@@ -17,6 +18,12 @@ function parseLimit(value: string | null): number {
 }
 
 export async function GET(request: NextRequest) {
+  const limited = await rateLimit(request);
+
+  if (limited) {
+    return limited;
+  }
+
   const searchParams = request.nextUrl.searchParams;
   const query = searchParams.get("q")?.trim() ?? "";
 

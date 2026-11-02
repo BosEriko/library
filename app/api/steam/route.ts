@@ -4,6 +4,7 @@ import { errorMessage } from "@/lib/http";
 import { findSteamGames } from "@/lib/providers/igdb";
 import { getCached, setCached } from "@/lib/redis";
 import type { SteamMatch } from "@/lib/types";
+import { rateLimit } from "@/lib/rate-limit";
 
 const MAX_IDS = 200;
 
@@ -32,6 +33,12 @@ async function findCachedSteamGames(ids: string[]): Promise<Record<string, Steam
 }
 
 export async function GET(request: NextRequest) {
+  const limited = await rateLimit(request);
+
+  if (limited) {
+    return limited;
+  }
+
   const ids = [
     ...new Set(
       (request.nextUrl.searchParams.get("ids") ?? "")

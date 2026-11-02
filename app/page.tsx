@@ -76,6 +76,7 @@ const ERRORS = [
   { status: "400", when: "Search was called without q, q is longer than 100 characters, or Steam was called without valid ids." },
   { status: "403", when: "An 18+ title was requested without adult=true. The body is { \"error\": \"Adult content\" }." },
   { status: "404", when: "Unknown type or list, non-numeric id, or no item with that id." },
+  { status: "429", when: "More than 60 requests in a minute from the same address. The Retry-After header says how many seconds to wait." },
   { status: "502", when: "The provider or database failed and no saved copy could be returned." },
 ];
 
@@ -210,7 +211,7 @@ export default function Home() {
           </p>
           <p className={styles.note}>
             The API is public and read-only. All endpoints return JSON and accept <code>GET</code>{" "}
-            only.
+            only, with a limit of 60 requests a minute per address.
           </p>
         </header>
 
@@ -391,9 +392,9 @@ export default function Home() {
               provider failed is not cached.
             </li>
             <li>
-              <strong>Profiles, 30 days.</strong> Profiles are saved to Firestore and refreshed from
-              the provider once the saved copy is older than 30 days. If the provider is
-              unavailable, the older copy is returned instead.
+              <strong>Profiles, 30 days.</strong> Profiles are saved to Firestore. Once the saved
+              copy is older than 30 days, it is still returned right away and a fresh copy is
+              fetched from the provider in the background for the next request.
             </li>
             <li>
               <strong>Lists, 1 day.</strong> Each list is saved to Firestore and rebuilt from the

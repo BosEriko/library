@@ -71,3 +71,41 @@ export async function setCached(entries: [string, unknown][], ttlSeconds: number
     console.warn(`Redis write failed: ${errorMessage(error)}`);
   }
 }
+
+export async function increment(key: string, ttlSeconds: number): Promise<number | null> {
+  const redis = await getRedis();
+
+  if (!redis) {
+    return null;
+  }
+
+  try {
+    const count = await redis.incr(key);
+
+    if (count === 1) {
+      await redis.expire(key, ttlSeconds);
+    }
+
+    return count;
+  } catch (error) {
+    console.warn(`Redis increment failed: ${errorMessage(error)}`);
+
+    return null;
+  }
+}
+
+export async function acquireLock(key: string, ttlSeconds: number): Promise<boolean> {
+  const redis = await getRedis();
+
+  if (!redis) {
+    return true;
+  }
+
+  try {
+    return (await redis.set(key, "1", "EX", ttlSeconds, "NX")) === "OK";
+  } catch (error) {
+    console.warn(`Redis lock failed: ${errorMessage(error)}`);
+
+    return true;
+  }
+}
