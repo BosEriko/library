@@ -4,6 +4,7 @@ const SECTIONS = [
   { id: "overview", label: "Overview" },
   { id: "search", label: "Search" },
   { id: "profile", label: "Profile" },
+  { id: "images", label: "Images" },
   { id: "steam", label: "Steam" },
   { id: "lists", label: "Lists" },
   { id: "schema", label: "Media schema" },
@@ -24,6 +25,12 @@ const PROFILE_PARAMS = [
 
 const PROFILE_QUERY_PARAMS = [
   { name: "adult", type: "boolean", required: false, description: "Set to true to allow 18+ titles. Without it, they return 403 and are not saved." },
+];
+
+const IMAGE_PARAMS = [
+  { name: "type", type: "string", required: true, description: "One of anime, manga or game." },
+  { name: "id", type: "integer", required: true, description: "The sourceId of a search result." },
+  { name: "image", type: "string", required: true, description: "cover or banner." },
 ];
 
 const STEAM_PARAMS = [
@@ -75,10 +82,14 @@ const DETAILS = [
 const ERRORS = [
   { status: "400", when: "Search was called without q, q is longer than 100 characters, or Steam was called without valid ids." },
   { status: "403", when: "An 18+ title was requested without adult=true. The body is { \"error\": \"Adult content\" }." },
-  { status: "404", when: "Unknown type or list, non-numeric id, or no item with that id." },
-  { status: "429", when: "More than 60 requests in a minute from the same address. The Retry-After header says how many seconds to wait." },
+  { status: "404", when: "Unknown type, list or image, non-numeric id, no item with that id, or an item without that image." },
+  { status: "429", when: "More than 60 requests in a minute from the same address, or 300 for images. The Retry-After header says how many seconds to wait." },
   { status: "502", when: "The provider or database failed and no saved copy could be returned." },
 ];
+
+const IMAGE_RESPONSE = `HTTP/2 302
+location: https://…/media/ANIME_154587/cover-….webp
+cache-control: public, max-age=3600`;
 
 const SEARCH_RESPONSE = `{
   "query": "frieren",
@@ -210,8 +221,9 @@ export default function Home() {
             that follows the same schema.
           </p>
           <p className={styles.note}>
-            The API is public and read-only. All endpoints return JSON and accept <code>GET</code>{" "}
-            only, with a limit of 60 requests a minute per address.
+            The API is public and read-only. All endpoints accept <code>GET</code> only and return
+            JSON, except images, which redirect to the image file. Each address can make 60
+            requests a minute, plus 300 a minute for images.
           </p>
         </header>
 
@@ -263,6 +275,27 @@ export default function Home() {
             profile URL, e.g. <code>ANIME</code> and <code>154587</code> become{" "}
             <code>/api/anime/154587</code>.
           </p>
+        </section>
+
+        <section id="images" className={styles.section}>
+          <h2>Images</h2>
+          <Endpoint path="/api/{type}/{id}/{image}" />
+          <p>
+            Redirects to the current cover or banner of a single item. Image files get a new
+            address whenever they change, and the old file is deleted, so save this URL instead of
+            the <code>coverImage</code> or <code>bannerImage</code> of a profile. The item is loaded
+            the same way as its profile.
+          </p>
+
+          <h3>Path parameters</h3>
+          <Params rows={IMAGE_PARAMS} />
+
+          <h3>Query parameters</h3>
+          <Params rows={PROFILE_QUERY_PARAMS} />
+
+          <h3>Example</h3>
+          <Example label="Request">{"curl -I /api/anime/154587/cover"}</Example>
+          <Example label="Response">{IMAGE_RESPONSE}</Example>
         </section>
 
         <section id="steam" className={styles.section}>
@@ -400,6 +433,10 @@ export default function Home() {
               <strong>Lists, 1 day.</strong> Each list is saved to Firestore and rebuilt from the
               provider once the saved copy is a day old. If the provider is unavailable, the older
               copy is returned.
+            </li>
+            <li>
+              <strong>Images, 1 hour.</strong> Browsers keep each redirect for an hour, then ask
+              again in case the image has changed.
             </li>
           </ul>
           <p>

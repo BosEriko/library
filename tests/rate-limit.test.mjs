@@ -15,7 +15,7 @@ mock.module("@/lib/redis", {
   },
 });
 
-const { rateLimit, RATE_LIMIT } = await import("@/lib/rate-limit");
+const { rateLimit, RATE_LIMIT, IMAGE_RATE_LIMIT } = await import("@/lib/rate-limit");
 
 function request(ip) {
   return new Request("https://library.boseriko.com/api/search?q=zelda", {
@@ -51,6 +51,16 @@ test("each address has its own limit", async () => {
   for (let i = 0; i < RATE_LIMIT; i++) await rateLimit(request("1.1.1.1"));
 
   assert.equal(await rateLimit(request("2.2.2.2")), null);
+});
+
+test("images have their own, higher limit", async () => {
+  for (let i = 0; i < RATE_LIMIT; i++) await rateLimit(request("1.1.1.1"));
+
+  for (let i = 0; i < IMAGE_RATE_LIMIT; i++) {
+    assert.equal(await rateLimit(request("1.1.1.1"), "image"), null);
+  }
+
+  assert.equal((await rateLimit(request("1.1.1.1"), "image")).status, 429);
 });
 
 test("requests are allowed when Redis is unavailable", async () => {
