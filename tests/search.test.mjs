@@ -15,7 +15,7 @@ mock.module("@/lib/redis", {
 mock.module("@/lib/providers/anilist", {
   namedExports: {
     searchAniList: async (query, type) => [
-      { id: `${type}_1`, type, title: query, details: { anilistId: 100 } },
+      { id: `${type}_1`, type, title: query, source: { provider: "myanimelist" }, details: {} },
     ],
   },
 });
@@ -57,10 +57,12 @@ test("adult and limit settings get their own cache entries", async () => {
   ]);
 });
 
-test("a search cached under AniList ids is searched again", async () => {
+test("a search cached with an old AniList source is searched again", async () => {
   cache.set("search:safe:5:zelda", {
     results: {
-      anime: [{ id: "ANIME_9", type: "ANIME", title: "old", details: { malId: 9 } }],
+      anime: [
+        { id: "ANIME_9", type: "ANIME", title: "old", source: { provider: "anilist" }, details: { anilistId: 9 } },
+      ],
       manga: [],
       game: [],
     },

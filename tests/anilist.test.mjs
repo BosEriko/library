@@ -49,8 +49,11 @@ test("search normalizes AniList media into the shared schema", async () => {
   assert.equal(media.year, 2023);
   assert.equal(media.isAdult, false);
   assert.equal(media.coverImage, "https://s4.anilist.co/cover.png");
+  assert.deepEqual(media.source, {
+    provider: "myanimelist",
+    url: "https://myanimelist.net/anime/52991",
+  });
   assert.deepEqual(media.details, {
-    anilistId: 154587,
     format: "TV",
     episodes: 28,
     duration: "24 min per ep",
@@ -86,7 +89,8 @@ test("profiles are looked up by MyAnimeList id", async () => {
   assert.match(body.query, /Media\(idMal: \$id, type: \$type\)/);
   assert.deepEqual(body.variables, { id: 52991, type: "ANIME" });
   assert.equal(media.id, "ANIME_52991");
-  assert.equal(media.details.anilistId, 154587);
+  assert.equal(media.source.url, "https://myanimelist.net/anime/52991");
+  assert.equal("anilistId" in media.details, false);
 });
 
 test("search excludes adult titles unless they are allowed", async () => {
@@ -121,6 +125,7 @@ test("manga authors are listed once even with both story and art roles", async (
   const media = await getAniList("52991", "MANGA");
 
   assert.equal(media.id, "MANGA_52991");
+  assert.equal(media.source.url, "https://myanimelist.net/manga/52991");
   assert.deepEqual(media.details.authors, ["Kanehito Yamada", "Tsukasa Abe"]);
   assert.equal(media.details.chapters, 140);
 });

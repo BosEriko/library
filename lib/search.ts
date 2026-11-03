@@ -3,7 +3,7 @@ import { errorMessage } from "@/lib/http";
 import { searchAniList } from "@/lib/providers/anilist";
 import { searchIgdb } from "@/lib/providers/igdb";
 import { getCached, setCached } from "@/lib/redis";
-import { savedWithMalIds, type Media, type MediaSegment } from "@/lib/types";
+import { hasCurrentSource, type Media, type MediaSegment } from "@/lib/types";
 
 export interface SearchResults {
   results: Record<MediaSegment, Media[]>;
@@ -50,7 +50,7 @@ export async function searchAll(
   const key = `search:${allowAdult ? "adult" : "safe"}:${limit}:${query.toLowerCase()}`;
   const [hit] = await getCached<SearchResults>([key]);
 
-  if (hit && [...hit.results.anime, ...hit.results.manga].every(savedWithMalIds)) {
+  if (hit && [...hit.results.anime, ...hit.results.manga].every(hasCurrentSource)) {
     return hit;
   }
 

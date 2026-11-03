@@ -34,7 +34,7 @@ export interface Media {
   genres: string[];
   score: number | null;
   isAdult: boolean;
-  source: { provider: "anilist" | "igdb"; url: string };
+  source: { provider: "myanimelist" | "igdb"; url: string };
   details: Record<string, unknown>;
 }
 
@@ -61,7 +61,30 @@ export interface SteamMatch {
 }
 
 export function savedWithMalIds(media: Media): boolean {
-  return media.type === "GAME" || media.details?.anilistId !== undefined;
+  return hasCurrentSource(media) || media.details?.anilistId !== undefined;
+}
+
+export function hasCurrentSource(media: Media): boolean {
+  return media.type === "GAME" || media.source?.provider === "myanimelist";
+}
+
+export function malSource(type: MediaType, malId: string | number): Media["source"] {
+  return {
+    provider: "myanimelist",
+    url: `https://myanimelist.net/${type.toLowerCase()}/${malId}`,
+  };
+}
+
+export function withCurrentSource<T extends Media>(media: T): T {
+  if (hasCurrentSource(media)) {
+    return media;
+  }
+
+  const details = { ...media.details };
+
+  delete details.anilistId;
+
+  return { ...media, source: malSource(media.type, media.sourceId), details };
 }
 
 export function mediaId(type: MediaType, sourceId: string | number): string {

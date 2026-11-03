@@ -47,7 +47,7 @@ const LIST_QUERY_PARAMS = [
 ];
 
 const LISTS = [
-  { list: "trending", anime: "Trending on AniList right now.", manga: "Trending on AniList right now.", game: "Most visited on IGDB right now." },
+  { list: "trending", anime: "Trending right now.", manga: "Trending right now.", game: "Most visited right now." },
   { list: "season", anime: "This season's anime, most popular first.", manga: "Series that started in the last 6 months and are still running, most popular first.", game: "Released in the last 90 days, most anticipated first." },
   { list: "top", anime: "Highest rated of all time.", manga: "Highest rated of all time.", game: "Highest rated of all time, from games with at least 300 ratings." },
   { list: "upcoming", anime: "Not yet released, most popular first.", manga: "Not yet released, most popular first.", game: "Not yet released, most anticipated first." },
@@ -67,15 +67,15 @@ const SCHEMA_FIELDS = [
   { name: "genres", type: "string[]", description: "Genres and themes." },
   { name: "score", type: "number | null", description: "Rating normalized to 0–10." },
   { name: "isAdult", type: "boolean", description: "Whether the title is 18+. Only true when adult=true was passed." },
-  { name: "source", type: "{ provider, url }", description: "The data provider and a link to the original page." },
+  { name: "source", type: "{ provider, url }", description: "myanimelist for anime and manga or igdb for games, with a link to the title's page there." },
   { name: "details", type: "object", description: "Type-specific fields, listed below." },
   { name: "createdAt", type: "string", description: "Profile only. ISO date the item was first saved." },
   { name: "updatedAt", type: "string", description: "Profile only. ISO date the item was last refreshed." },
 ];
 
 const DETAILS = [
-  { type: "ANIME", fields: "anilistId, format, episodes, duration, season, studios, airedFrom, airedTo" },
-  { type: "MANGA", fields: "anilistId, format, chapters, volumes, authors, publishedFrom, publishedTo" },
+  { type: "ANIME", fields: "format, episodes, duration, season, studios, airedFrom, airedTo" },
+  { type: "MANGA", fields: "format, chapters, volumes, authors, publishedFrom, publishedTo" },
   { type: "GAME", fields: "platforms, developers, publishers, releaseDate" },
 ];
 
@@ -106,8 +106,8 @@ const SEARCH_RESPONSE = `{
         "year": 2023,
         "score": 9.1,
         "isAdult": false,
-        "source": { "provider": "…", "url": "https://…" },
-        "details": { "anilistId": 154587, "format": "TV", "episodes": 28, … }
+        "source": { "provider": "myanimelist", "url": "https://myanimelist.net/anime/52991" },
+        "details": { "format": "TV", "episodes": 28, … }
       }
     ],
     "manga": [ … ],

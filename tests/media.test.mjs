@@ -71,8 +71,8 @@ function media(overrides = {}) {
     genres: [],
     score: 8,
     isAdult: false,
-    source: { provider: "anilist", url: "https://anilist.co/anime/1" },
-    details: { anilistId: 100 },
+    source: { provider: "myanimelist", url: "https://myanimelist.net/anime/1" },
+    details: {},
     ...overrides,
   };
 }
@@ -200,24 +200,42 @@ test("the saved copy is returned when the provider fails", async () => {
   assert.equal(result.title, "Title");
 });
 
+const aniListSource = { provider: "anilist", url: "https://anilist.co/anime/100" };
+
 test("a copy saved under its AniList id is replaced, never returned", async () => {
-  docs.set("ANIME_1", savedDoc(5, { title: "Another title", details: {} }));
+  docs.set("ANIME_1", savedDoc(5, { title: "Another title", source: aniListSource, details: {} }));
   provider = async () => media();
 
   const result = await getOrFetchMedia("ANIME", "1", false);
 
   assert.equal(result.title, "Title");
   assert.equal(scheduled.length, 0);
-  assert.equal(docs.get("ANIME_1").details.anilistId, 100);
+  assert.equal(docs.get("ANIME_1").source.provider, "myanimelist");
 });
 
 test("a copy saved under its AniList id isn't used when the provider fails", async () => {
-  docs.set("ANIME_1", savedDoc(5, { title: "Another title", details: {} }));
+  docs.set("ANIME_1", savedDoc(5, { title: "Another title", source: aniListSource, details: {} }));
   provider = async () => {
     throw new Error("provider down");
   };
 
   await assert.rejects(getOrFetchMedia("ANIME", "1", false), /provider down/);
+});
+
+test("a copy with the old AniList source is returned without it and refreshed", async () => {
+  docs.set("ANIME_1", savedDoc(5, { source: aniListSource, details: { anilistId: 100, format: "TV" } }));
+  provider = async () => media({ details: { format: "TV" } });
+
+  const result = await getOrFetchMedia("ANIME", "1", false);
+
+  assert.deepEqual(result.source, { provider: "myanimelist", url: "https://myanimelist.net/anime/1" });
+  assert.deepEqual(result.details, { format: "TV" });
+  assert.equal(scheduled.length, 1);
+
+  await scheduled[0]();
+
+  assert.equal(docs.get("ANIME_1").source.provider, "myanimelist");
+  assert.deepEqual(events, ["set ANIME_1"]);
 });
 
 test("a provider failure with nothing saved is passed on", async () => {

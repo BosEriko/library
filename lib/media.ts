@@ -7,8 +7,10 @@ import { getAniList } from "@/lib/providers/anilist";
 import { getIgdb } from "@/lib/providers/igdb";
 import { acquireLock } from "@/lib/redis";
 import {
+  hasCurrentSource,
   mediaId,
   savedWithMalIds,
+  withCurrentSource,
   type Media,
   type MediaType,
   type StoredMedia,
@@ -41,7 +43,7 @@ function toStoredMedia(doc: MediaDocument): StoredMedia {
   delete media.images;
 
   return {
-    ...media,
+    ...withCurrentSource(media),
     createdAt: doc.createdAt.toDate().toISOString(),
     updatedAt: doc.updatedAt.toDate().toISOString(),
   };
@@ -85,7 +87,11 @@ function assertAllowed(media: Media, allowAdult: boolean): void {
 }
 
 function isFresh(doc: MediaDocument): boolean {
-  return doc.isAdult !== undefined && Date.now() - doc.updatedAt.toMillis() < MAX_AGE_MS;
+  return (
+    doc.isAdult !== undefined &&
+    hasCurrentSource(doc) &&
+    Date.now() - doc.updatedAt.toMillis() < MAX_AGE_MS
+  );
 }
 
 async function saveMedia(

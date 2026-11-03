@@ -1,5 +1,5 @@
 import { fetchJson, NotFoundError } from "@/lib/http";
-import { mediaId, type ListName, type Media } from "@/lib/types";
+import { malSource, mediaId, type ListName, type Media } from "@/lib/types";
 
 const ANILIST_URL = "https://graphql.anilist.co";
 const PAGE_SIZE = 50;
@@ -7,9 +7,7 @@ const PAGE_SIZE = 50;
 type AniListType = "ANIME" | "MANGA";
 
 const MEDIA_FIELDS = `
-  id
   idMal
-  siteUrl
   title { romaji english native }
   synonyms
   description(asHtml: false)
@@ -114,9 +112,7 @@ interface AniListDate {
 }
 
 interface AniListMedia {
-  id: number;
   idMal: number | null;
-  siteUrl: string;
   title: { romaji: string | null; english: string | null; native: string | null };
   synonyms: string[];
   coverImage: { extraLarge: string | null; large: string | null } | null;
@@ -181,14 +177,13 @@ function normalize(media: AniListMedia, malId: number, type: AniListType): Media
     genres: media.genres,
     score: media.averageScore !== null ? media.averageScore / 10 : null,
     isAdult: media.isAdult,
-    source: { provider: "anilist" as const, url: media.siteUrl },
+    source: malSource(type, malId),
   };
 
   if (type === "ANIME") {
     return {
       ...base,
       details: {
-        anilistId: media.id,
         format: media.format,
         episodes: media.episodes,
         duration: media.duration !== null ? `${media.duration} min per ep` : null,
@@ -203,7 +198,6 @@ function normalize(media: AniListMedia, malId: number, type: AniListType): Media
   return {
     ...base,
     details: {
-      anilistId: media.id,
       format: media.format,
       chapters: media.chapters,
       volumes: media.volumes,

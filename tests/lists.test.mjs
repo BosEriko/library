@@ -26,8 +26,8 @@ mock.module("@/lib/providers/igdb", {
 
 const { getOrFetchList } = await import("@/lib/lists");
 
-function item(sourceId, details) {
-  return { id: `ANIME_${sourceId}`, type: "ANIME", sourceId, title: sourceId, details };
+function item(sourceId, provider, details = {}) {
+  return { id: `ANIME_${sourceId}`, type: "ANIME", sourceId, title: sourceId, source: { provider }, details };
 }
 
 function savedList(items) {
@@ -36,19 +36,28 @@ function savedList(items) {
 
 test.beforeEach(() => {
   docs.clear();
-  fetched = [item("52991", { anilistId: 154587 })];
+  fetched = [item("52991", "myanimelist")];
 });
 
 test("a fresh list saved with MyAnimeList ids is returned as is", async () => {
-  docs.set("ANIME_top", savedList([item("21", { anilistId: 21 })]));
+  docs.set("ANIME_top", savedList([item("21", "myanimelist")]));
 
   const { list } = await getOrFetchList("ANIME", "top", false);
 
   assert.deepEqual(list.items.map((media) => media.sourceId), ["21"]);
 });
 
+test("a fresh list with the old AniList source is rebuilt", async () => {
+  docs.set("ANIME_top", savedList([item("21", "anilist", { anilistId: 21 })]));
+
+  const { list } = await getOrFetchList("ANIME", "top", false);
+
+  assert.deepEqual(list.items.map((media) => media.sourceId), ["52991"]);
+  assert.equal(docs.get("ANIME_top").items[0].source.provider, "myanimelist");
+});
+
 test("a list saved under AniList ids is rebuilt", async () => {
-  docs.set("ANIME_top", savedList([item("154587", { malId: 52991 })]));
+  docs.set("ANIME_top", savedList([item("154587", "anilist", { malId: 52991 })]));
 
   const { list, stale } = await getOrFetchList("ANIME", "top", false);
 
