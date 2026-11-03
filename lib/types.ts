@@ -60,6 +60,10 @@ export interface SteamMatch {
   isAdult: boolean;
 }
 
+export function savedWithMalIds(media: Media): boolean {
+  return media.type === "GAME" || media.details?.anilistId !== undefined;
+}
+
 export function mediaId(type: MediaType, sourceId: string | number): string {
   return `${type}_${sourceId}`;
 }

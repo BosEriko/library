@@ -2,7 +2,7 @@ import { Timestamp } from "firebase-admin/firestore";
 import { getDb } from "@/lib/firebase";
 import { listAniList } from "@/lib/providers/anilist";
 import { listIgdb } from "@/lib/providers/igdb";
-import type { ListName, Media, MediaList, MediaType } from "@/lib/types";
+import { savedWithMalIds, type ListName, type Media, type MediaList, type MediaType } from "@/lib/types";
 
 const COLLECTION = "lists";
 const LIST_SIZE = 20;
@@ -46,7 +46,8 @@ export async function getOrFetchList(
     .collection(COLLECTION)
     .doc(`${type}_${list}${allowAdult ? "_adult" : ""}`);
   const snapshot = await ref.get();
-  const existing = snapshot.exists ? (snapshot.data() as ListDocument) : null;
+  const saved = snapshot.exists ? (snapshot.data() as ListDocument) : null;
+  const existing = saved && saved.items.every(savedWithMalIds) ? saved : null;
 
   if (existing && Date.now() - existing.updatedAt.toMillis() < LIST_MAX_AGE_MS) {
     return { list: toMediaList(existing), stale: false };

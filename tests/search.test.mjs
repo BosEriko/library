@@ -13,7 +13,11 @@ mock.module("@/lib/redis", {
   },
 });
 mock.module("@/lib/providers/anilist", {
-  namedExports: { searchAniList: async (query, type) => [{ id: `${type}_1`, title: query }] },
+  namedExports: {
+    searchAniList: async (query, type) => [
+      { id: `${type}_1`, type, title: query, details: { anilistId: 100 } },
+    ],
+  },
 });
 mock.module("@/lib/providers/igdb", {
   namedExports: {
@@ -51,6 +55,22 @@ test("adult and limit settings get their own cache entries", async () => {
     "search:safe:10:zelda",
     "search:safe:5:zelda",
   ]);
+});
+
+test("a search cached under AniList ids is searched again", async () => {
+  cache.set("search:safe:5:zelda", {
+    results: {
+      anime: [{ id: "ANIME_9", type: "ANIME", title: "old", details: { malId: 9 } }],
+      manga: [],
+      game: [],
+    },
+    errors: {},
+  });
+
+  const result = await searchAll("zelda", 5, false);
+
+  assert.equal(result.results.anime[0].title, "zelda");
+  assert.equal(cache.get("search:safe:5:zelda").results.anime[0].title, "zelda");
 });
 
 test("a search where a provider failed is returned but not cached", async () => {

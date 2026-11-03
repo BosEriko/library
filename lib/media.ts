@@ -6,7 +6,13 @@ import { deleteImage, storeImage, type StoredImage } from "@/lib/images";
 import { getAniList } from "@/lib/providers/anilist";
 import { getIgdb } from "@/lib/providers/igdb";
 import { acquireLock } from "@/lib/redis";
-import { mediaId, type Media, type MediaType, type StoredMedia } from "@/lib/types";
+import {
+  mediaId,
+  savedWithMalIds,
+  type Media,
+  type MediaType,
+  type StoredMedia,
+} from "@/lib/types";
 
 const COLLECTION = "media";
 const MAX_AGE_MS = 30 * 24 * 60 * 60 * 1000;
@@ -128,7 +134,8 @@ export async function getOrFetchMedia(
 ): Promise<StoredMedia> {
   const ref = getDb().collection(COLLECTION).doc(mediaId(type, id));
   const snapshot = await ref.get();
-  const existing = snapshot.exists ? (snapshot.data() as MediaDocument) : null;
+  const saved = snapshot.exists ? (snapshot.data() as MediaDocument) : null;
+  const existing = saved && savedWithMalIds(saved) ? saved : null;
 
   if (existing && isFresh(existing)) {
     assertAllowed(existing, allowAdult);

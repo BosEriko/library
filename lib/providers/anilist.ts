@@ -2,6 +2,7 @@ import { fetchJson, NotFoundError } from "@/lib/http";
 import { mediaId, type ListName, type Media } from "@/lib/types";
 
 const ANILIST_URL = "https://graphql.anilist.co";
+const PAGE_SIZE = 50;
 
 type AniListType = "ANIME" | "MANGA";
 
@@ -102,7 +103,7 @@ function listVariables(list: ListName, type: AniListType, now: Date): Record<str
 
 const MEDIA_QUERY = `
   query ($id: Int, $type: MediaType) {
-    Media(id: $id, type: $type) { ${MEDIA_FIELDS} }
+    Media(idMal: $id, type: $type) { ${MEDIA_FIELDS} }
   }
 `;
 
@@ -160,16 +161,16 @@ function toIsoDate(date: AniListDate): string | null {
   return new Date(Date.UTC(date.year, (date.month ?? 1) - 1, date.day ?? 1)).toISOString();
 }
 
-function normalize(media: AniListMedia, type: AniListType): Media {
+function normalize(media: AniListMedia, malId: number, type: AniListType): Media {
   const title = media.title.romaji ?? media.title.english ?? media.title.native ?? "";
   const altTitles = [media.title.english, media.title.native, ...media.synonyms].filter(
     (alt): alt is string => Boolean(alt) && alt !== title,
   );
 
   const base = {
-    id: mediaId(type, media.id),
+    id: mediaId(type, malId),
     type,
-    sourceId: String(media.id),
+    sourceId: String(malId),
     title,
     altTitles: [...new Set(altTitles)],
     synopsis: media.description?.replace(/<[^>]+>/g, "").trim() || null,
@@ -187,7 +188,7 @@ function normalize(media: AniListMedia, type: AniListType): Media {
     return {
       ...base,
       details: {
-        malId: media.idMal,
+        anilistId: media.id,
         format: media.format,
         episodes: media.episodes,
         duration: media.duration !== null ? `${media.duration} min per ep` : null,
@@ -202,7 +203,7 @@ function normalize(media: AniListMedia, type: AniListType): Media {
   return {
     ...base,
     details: {
-      malId: media.idMal,
+      anilistId: media.id,
       format: media.format,
       chapters: media.chapters,
       volumes: media.volumes,
@@ -219,6 +220,12 @@ function normalize(media: AniListMedia, type: AniListType): Media {
   };
 }
 
+function withMalIds(media: AniListMedia[], type: AniListType, limit: number): Media[] {
+  return media
+    .flatMap((item) => (item.idMal === null ? [] : [normalize(item, item.idMal, type)]))
+    .slice(0, limit);
+}
+
 export async function searchAniList(
   query: string,
   type: AniListType,
@@ -228,10 +235,10 @@ export async function searchAniList(
   const data = await queryAniList<{ Page: { media: AniListMedia[] } }>(searchQuery(allowAdult), {
     search: query,
     type,
-    perPage: limit,
+    perPage: PAGE_SIZE,
   });
 
-  return data.Page.media.map((media) => normalize(media, type));
+  return withMalIds(data.Page.media, type, limit);
 }
 
 export async function listAniList(
@@ -242,11 +249,11 @@ export async function listAniList(
 ): Promise<Media[]> {
   const data = await queryAniList<{ Page: { media: AniListMedia[] } }>(listQuery(allowAdult), {
     type,
-    perPage: limit,
+    perPage: PAGE_SIZE,
     ...listVariables(list, type, new Date()),
   });
 
-  return data.Page.media.map((media) => normalize(media, type));
+  return withMalIds(data.Page.media, type, limit);
 }
 
 export async function getAniList(id: string, type: AniListType): Promise<Media> {
@@ -255,9 +262,9 @@ export async function getAniList(id: string, type: AniListType): Promise<Media> 
     type,
   });
 
-  if (!data.Media) {
-    throw new NotFoundError(`AniList ${type} ${id} not found`);
+  if (!data.Media?.idMal) {
+    throw new NotFoundError(`${type} with MyAnimeList id ${id} not found`);
   }
 
-  return normalize(data.Media, type);
+  return normalize(data.Media, data.Media.idMal, type);
 }

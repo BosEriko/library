@@ -72,7 +72,7 @@ function media(overrides = {}) {
     score: 8,
     isAdult: false,
     source: { provider: "anilist", url: "https://anilist.co/anime/1" },
-    details: {},
+    details: { anilistId: 100 },
     ...overrides,
   };
 }
@@ -198,6 +198,26 @@ test("the saved copy is returned when the provider fails", async () => {
   const result = await getOrFetchMedia("ANIME", "1", false);
 
   assert.equal(result.title, "Title");
+});
+
+test("a copy saved under its AniList id is replaced, never returned", async () => {
+  docs.set("ANIME_1", savedDoc(5, { title: "Another title", details: {} }));
+  provider = async () => media();
+
+  const result = await getOrFetchMedia("ANIME", "1", false);
+
+  assert.equal(result.title, "Title");
+  assert.equal(scheduled.length, 0);
+  assert.equal(docs.get("ANIME_1").details.anilistId, 100);
+});
+
+test("a copy saved under its AniList id isn't used when the provider fails", async () => {
+  docs.set("ANIME_1", savedDoc(5, { title: "Another title", details: {} }));
+  provider = async () => {
+    throw new Error("provider down");
+  };
+
+  await assert.rejects(getOrFetchMedia("ANIME", "1", false), /provider down/);
 });
 
 test("a provider failure with nothing saved is passed on", async () => {

@@ -20,7 +20,7 @@ const SEARCH_PARAMS = [
 
 const PROFILE_PARAMS = [
   { name: "type", type: "string", required: true, description: "One of anime, manga or game." },
-  { name: "id", type: "integer", required: true, description: "The sourceId of a search result." },
+  { name: "id", type: "integer", required: true, description: "The sourceId of a search result: the MyAnimeList id for anime and manga, the IGDB id for games." },
 ];
 
 const PROFILE_QUERY_PARAMS = [
@@ -29,7 +29,7 @@ const PROFILE_QUERY_PARAMS = [
 
 const IMAGE_PARAMS = [
   { name: "type", type: "string", required: true, description: "One of anime, manga or game." },
-  { name: "id", type: "integer", required: true, description: "The sourceId of a search result." },
+  { name: "id", type: "integer", required: true, description: "The sourceId of a search result: the MyAnimeList id for anime and manga, the IGDB id for games." },
   { name: "image", type: "string", required: true, description: "cover or banner." },
 ];
 
@@ -54,9 +54,9 @@ const LISTS = [
 ];
 
 const SCHEMA_FIELDS = [
-  { name: "id", type: "string", description: "Type and source id joined, e.g. ANIME_154587. Also the Firestore document id." },
+  { name: "id", type: "string", description: "Type and source id joined, e.g. ANIME_52991. Also the Firestore document id." },
   { name: "type", type: '"ANIME" | "MANGA" | "GAME"', description: "Media type." },
-  { name: "sourceId", type: "string", description: "Id at the source provider." },
+  { name: "sourceId", type: "string", description: "MyAnimeList id for anime and manga, IGDB id for games." },
   { name: "title", type: "string", description: "Primary title." },
   { name: "altTitles", type: "string[]", description: "Other known titles." },
   { name: "synopsis", type: "string | null", description: "Plot summary or description." },
@@ -74,8 +74,8 @@ const SCHEMA_FIELDS = [
 ];
 
 const DETAILS = [
-  { type: "ANIME", fields: "malId, format, episodes, duration, season, studios, airedFrom, airedTo" },
-  { type: "MANGA", fields: "malId, format, chapters, volumes, authors, publishedFrom, publishedTo" },
+  { type: "ANIME", fields: "anilistId, format, episodes, duration, season, studios, airedFrom, airedTo" },
+  { type: "MANGA", fields: "anilistId, format, chapters, volumes, authors, publishedFrom, publishedTo" },
   { type: "GAME", fields: "platforms, developers, publishers, releaseDate" },
 ];
 
@@ -88,7 +88,7 @@ const ERRORS = [
 ];
 
 const IMAGE_RESPONSE = `HTTP/2 302
-location: https://…/media/ANIME_154587/cover-….webp
+location: https://…/media/ANIME_52991/cover-….webp
 cache-control: public, max-age=3600`;
 
 const SEARCH_RESPONSE = `{
@@ -96,9 +96,9 @@ const SEARCH_RESPONSE = `{
   "results": {
     "anime": [
       {
-        "id": "ANIME_154587",
+        "id": "ANIME_52991",
         "type": "ANIME",
-        "sourceId": "154587",
+        "sourceId": "52991",
         "title": "Sousou no Frieren",
         "altTitles": ["Frieren: Beyond Journey's End"],
         "coverImage": "https://…/cover.jpg",
@@ -107,7 +107,7 @@ const SEARCH_RESPONSE = `{
         "score": 9.1,
         "isAdult": false,
         "source": { "provider": "…", "url": "https://…" },
-        "details": { "malId": 52991, "format": "TV", "episodes": 28, … }
+        "details": { "anilistId": 154587, "format": "TV", "episodes": 28, … }
       }
     ],
     "manga": [ … ],
@@ -140,9 +140,9 @@ const LIST_RESPONSE = `{
   "list": "top",
   "items": [
     {
-      "id": "ANIME_154587",
+      "id": "ANIME_52991",
       "type": "ANIME",
-      "sourceId": "154587",
+      "sourceId": "52991",
       "title": "Sousou no Frieren",
       "score": 9.1,
       …
@@ -153,7 +153,7 @@ const LIST_RESPONSE = `{
 }`;
 
 const PROFILE_RESPONSE = `{
-  "id": "ANIME_154587",
+  "id": "ANIME_52991",
   "type": "ANIME",
   "title": "Sousou no Frieren",
   …
@@ -231,8 +231,8 @@ export default function Home() {
           <h2>Search</h2>
           <Endpoint path="/api/search?q={text}&limit={n}" />
           <p>
-            Searches every media type at once and returns a separate list for each. Searching does
-            not save anything.
+            Searches every media type at once and returns a separate list for each. Anime and manga
+            without a MyAnimeList id are left out. Searching does not save anything.
           </p>
 
           <h3>Query parameters</h3>
@@ -267,13 +267,13 @@ export default function Home() {
           <Params rows={PROFILE_QUERY_PARAMS} />
 
           <h3>Example</h3>
-          <Example label="Request">{"curl /api/anime/154587"}</Example>
+          <Example label="Request">{"curl /api/anime/52991"}</Example>
           <Example label="Response">{PROFILE_RESPONSE}</Example>
 
           <p className={styles.note}>
             Use the <code>type</code> and <code>sourceId</code> of a search result to build the
-            profile URL, e.g. <code>ANIME</code> and <code>154587</code> become{" "}
-            <code>/api/anime/154587</code>.
+            profile URL, e.g. <code>ANIME</code> and <code>52991</code> become{" "}
+            <code>/api/anime/52991</code>.
           </p>
         </section>
 
@@ -294,7 +294,7 @@ export default function Home() {
           <Params rows={PROFILE_QUERY_PARAMS} />
 
           <h3>Example</h3>
-          <Example label="Request">{"curl -I /api/anime/154587/cover"}</Example>
+          <Example label="Request">{"curl -I /api/anime/52991/cover"}</Example>
           <Example label="Response">{IMAGE_RESPONSE}</Example>
         </section>
 
@@ -326,7 +326,8 @@ export default function Home() {
           <p>
             Returns up to 20 titles for a ready-made list, such as what&apos;s trending or the
             highest rated. Items follow the media schema, so any of them can be opened with the
-            profile endpoint.
+            profile endpoint. Anime and manga without a MyAnimeList id are left out, so a list can
+            have fewer than 20 titles or none.
           </p>
 
           <h3>Path parameters</h3>

@@ -1,6 +1,6 @@
 import test, { mock } from "node:test";
 import assert from "node:assert/strict";
-import { getAniList, searchAniList } from "@/lib/providers/anilist";
+import { getAniList, listAniList, searchAniList } from "@/lib/providers/anilist";
 import { NotFoundError } from "@/lib/http";
 
 const anime = {
@@ -40,8 +40,8 @@ test("search normalizes AniList media into the shared schema", async () => {
 
   const [media] = await searchAniList("frieren", "ANIME", 5, false);
 
-  assert.equal(media.id, "ANIME_154587");
-  assert.equal(media.sourceId, "154587");
+  assert.equal(media.id, "ANIME_52991");
+  assert.equal(media.sourceId, "52991");
   assert.equal(media.title, "Sousou no Frieren");
   assert.deepEqual(media.altTitles, ["Frieren: Beyond Journey's End", "葬送のフリーレン"]);
   assert.equal(media.synopsis, "An elf magekeeps travelling.");
@@ -50,7 +50,7 @@ test("search normalizes AniList media into the shared schema", async () => {
   assert.equal(media.isAdult, false);
   assert.equal(media.coverImage, "https://s4.anilist.co/cover.png");
   assert.deepEqual(media.details, {
-    malId: 52991,
+    anilistId: 154587,
     format: "TV",
     episodes: 28,
     duration: "24 min per ep",
@@ -59,6 +59,34 @@ test("search normalizes AniList media into the shared schema", async () => {
     airedFrom: "2023-09-29T00:00:00.000Z",
     airedTo: "2024-03-22T00:00:00.000Z",
   });
+});
+
+test("titles without a MyAnimeList id are left out of search and lists", async () => {
+  const withoutMal = { ...anime, id: 1, idMal: null };
+  const fetch = mockAniList({
+    Page: { media: [withoutMal, anime, { ...anime, id: 2, idMal: 3 }, { ...anime, id: 4, idMal: 5 }] },
+  });
+
+  const search = await searchAniList("frieren", "ANIME", 2, false);
+  const list = await listAniList("ANIME", "top", 2, false);
+
+  assert.deepEqual(search.map((media) => media.sourceId), ["52991", "3"]);
+  assert.deepEqual(list.map((media) => media.sourceId), ["52991", "3"]);
+  for (const call of fetch.mock.calls) {
+    assert.equal(JSON.parse(call.arguments[1].body).variables.perPage, 50);
+  }
+});
+
+test("profiles are looked up by MyAnimeList id", async () => {
+  const fetch = mockAniList({ Media: anime });
+
+  const media = await getAniList("52991", "ANIME");
+
+  const body = JSON.parse(fetch.mock.calls[0].arguments[1].body);
+  assert.match(body.query, /Media\(idMal: \$id, type: \$type\)/);
+  assert.deepEqual(body.variables, { id: 52991, type: "ANIME" });
+  assert.equal(media.id, "ANIME_52991");
+  assert.equal(media.details.anilistId, 154587);
 });
 
 test("search excludes adult titles unless they are allowed", async () => {
@@ -90,9 +118,9 @@ test("manga authors are listed once even with both story and art roles", async (
     },
   });
 
-  const media = await getAniList("118586", "MANGA");
+  const media = await getAniList("52991", "MANGA");
 
-  assert.equal(media.id, "MANGA_154587");
+  assert.equal(media.id, "MANGA_52991");
   assert.deepEqual(media.details.authors, ["Kanehito Yamada", "Tsukasa Abe"]);
   assert.equal(media.details.chapters, 140);
 });
