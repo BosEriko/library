@@ -86,9 +86,13 @@ function assertAllowed(media: Media, allowAdult: boolean): void {
   }
 }
 
+function isComplete(doc: MediaDocument): boolean {
+  return doc.isAdult !== undefined && (doc.type !== "GAME" || doc.details?.steamUrl !== undefined);
+}
+
 function isFresh(doc: MediaDocument): boolean {
   return (
-    doc.isAdult !== undefined &&
+    isComplete(doc) &&
     hasCurrentSource(doc) &&
     Date.now() - doc.updatedAt.toMillis() < MAX_AGE_MS
   );
@@ -149,7 +153,7 @@ export async function getOrFetchMedia(
     return toStoredMedia(existing);
   }
 
-  if (existing && existing.isAdult !== undefined) {
+  if (existing && isComplete(existing)) {
     assertAllowed(existing, allowAdult);
     after(() => refreshInBackground(ref, type, id, existing));
 

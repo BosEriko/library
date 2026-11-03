@@ -76,7 +76,7 @@ const SCHEMA_FIELDS = [
 const DETAILS = [
   { type: "ANIME", fields: "format, episodes, duration, season, studios, airedFrom, airedTo" },
   { type: "MANGA", fields: "format, chapters, volumes, authors, publishedFrom, publishedTo" },
-  { type: "GAME", fields: "platforms, developers, publishers, releaseDate" },
+  { type: "GAME", fields: "platforms, developers, publishers, releaseDate, steamUrl (the Steam store page, or null when the game isn't on Steam)" },
 ];
 
 const ERRORS = [

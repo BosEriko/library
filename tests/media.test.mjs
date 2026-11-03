@@ -238,6 +238,33 @@ test("a copy with the old AniList source is returned without it and refreshed", 
   assert.deepEqual(events, ["set ANIME_1"]);
 });
 
+const savedGame = {
+  id: "GAME_1",
+  type: "GAME",
+  source: { provider: "igdb", url: "https://www.igdb.com/games/one" },
+};
+
+test("a game saved before Steam links existed is refetched before it is returned", async () => {
+  docs.set("GAME_1", savedDoc(5, { ...savedGame, details: { platforms: ["PC"] } }));
+  provider = async () =>
+    media({ ...savedGame, details: { platforms: ["PC"], steamUrl: "https://store.steampowered.com/app/1" } });
+
+  const result = await getOrFetchMedia("GAME", "1", false);
+
+  assert.equal(result.details.steamUrl, "https://store.steampowered.com/app/1");
+  assert.equal(scheduled.length, 0);
+});
+
+test("a saved game that isn't on Steam is returned without calling the provider", async () => {
+  docs.set("GAME_1", savedDoc(5, { ...savedGame, details: { steamUrl: null } }));
+  provider = async () => assert.fail("provider should not be called");
+
+  const result = await getOrFetchMedia("GAME", "1", false);
+
+  assert.equal(result.details.steamUrl, null);
+  assert.equal(scheduled.length, 0);
+});
+
 test("a provider failure with nothing saved is passed on", async () => {
   provider = async () => {
     throw new Error("provider down");

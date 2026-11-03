@@ -29,6 +29,8 @@ const FIELDS = [
   "involved_companies.company.name",
   "involved_companies.developer",
   "involved_companies.publisher",
+  "external_games.uid",
+  "external_games.external_game_source",
 ].join(",");
 
 interface IgdbImage {
@@ -51,6 +53,7 @@ interface IgdbGame {
   game_status?: { status: string };
   platforms?: { name: string }[];
   involved_companies?: { company: { name: string }; developer: boolean; publisher: boolean }[];
+  external_games?: { uid?: string; external_game_source?: number }[];
 }
 
 let token: { value: string; expiresAt: number } | null = null;
@@ -119,6 +122,9 @@ function imageUrl(image: IgdbImage | undefined, size: string): string | null {
 
 function normalize(game: IgdbGame): Media {
   const companies = game.involved_companies ?? [];
+  const steamAppId = game.external_games?.find(
+    (external) => external.external_game_source === STEAM_SOURCE_ID && external.uid,
+  )?.uid;
 
   return {
     id: mediaId("GAME", game.id),
@@ -144,6 +150,7 @@ function normalize(game: IgdbGame): Media {
       releaseDate: game.first_release_date
         ? new Date(game.first_release_date * 1000).toISOString()
         : null,
+      steamUrl: steamAppId ? `https://store.steampowered.com/app/${steamAppId}` : null,
     },
   };
 }

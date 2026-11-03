@@ -50,6 +50,25 @@ test("search normalizes IGDB games into the shared schema", async () => {
   assert.deepEqual(media.details.developers, ["Nintendo"]);
 });
 
+test("games on Steam link to their store page", async () => {
+  const fetch = mockIgdb([
+    {
+      ...game,
+      external_games: [
+        { uid: "zelda-gog", external_game_source: 5 },
+        { uid: "367520", external_game_source: 1 },
+      ],
+    },
+    game,
+  ]);
+
+  const [onSteam, notOnSteam] = await searchIgdb("zelda", 5, false);
+
+  assert.match(gameQueries(fetch)[0], /external_games\.uid,external_games\.external_game_source/);
+  assert.equal(onSteam.details.steamUrl, "https://store.steampowered.com/app/367520");
+  assert.equal(notOnSteam.details.steamUrl, null);
+});
+
 test("search excludes the erotic theme unless adult titles are allowed", async () => {
   const fetch = mockIgdb([]);
 

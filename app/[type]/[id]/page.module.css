@@ -126,6 +126,9 @@
 }
 
 .source {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px 20px;
   margin-top: 32px;
   font-size: 15px;
 }

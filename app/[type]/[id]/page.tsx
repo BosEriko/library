@@ -34,6 +34,21 @@ function dateRange(from: unknown, to: unknown): string | null {
   return typeof to === "string" ? `${formatDate(from)} – ${formatDate(to)}` : formatDate(from);
 }
 
+function outsideLinks(media: Media): [string, string][] {
+  const steamUrl = text(media.details.steamUrl);
+  const links: [string, string][] = [];
+
+  if (media.source.provider === "myanimelist") {
+    links.push(["View on MyAnimeList", media.source.url]);
+  }
+
+  if (steamUrl) {
+    links.push(["View on Steam", steamUrl]);
+  }
+
+  return links;
+}
+
 function detailRows(media: Media): [string, string | null][] {
   const details = media.details;
 
@@ -97,6 +112,7 @@ async function Profile({ params }: { params: PageProps<"/[type]/[id]">["params"]
     media.score !== null ? `Score ${formatScore(media.score)}` : null,
   ].filter(Boolean);
   const rows = detailRows(media).filter((row): row is [string, string] => row[1] !== null);
+  const links = outsideLinks(media);
   const paragraphs = (media.synopsis ?? "").split(/\n\s*\n/).filter((p) => p.trim());
 
   return (
@@ -162,11 +178,15 @@ async function Profile({ params }: { params: PageProps<"/[type]/[id]">["params"]
             </section>
           )}
 
-          <p className={styles.source}>
-            <a href={media.source.url} target="_blank" rel="noopener noreferrer">
-              View original page ↗
-            </a>
-          </p>
+          {links.length > 0 && (
+            <p className={styles.source}>
+              {links.map(([label, url]) => (
+                <a key={url} href={url} target="_blank" rel="noopener noreferrer">
+                  {label} ↗
+                </a>
+              ))}
+            </p>
+          )}
         </div>
       </div>
     </article>
