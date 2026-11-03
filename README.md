@@ -54,7 +54,8 @@ The app runs on [Fly.io](https://fly.io) as `library-boseriko` (see `fly.toml` a
      STORAGE_PUBLIC_URL=https://library-boseriko-media.t3.tigrisfiles.io \
      REDIS_URL="redis://default:...@fly-library-boseriko-redis.upstash.io:6379" \
      FIREBASE_PROJECT_ID=... FIREBASE_CLIENT_EMAIL=... FIREBASE_PRIVATE_KEY="..." \
-     IGDB_CLIENT_ID=... IGDB_CLIENT_SECRET=...
+     IGDB_API_URL=https://api.igdb.com/v4 IGDB_CLIENT_ID=... IGDB_CLIENT_SECRET=... \
+     ANIME_MANGA_API_URL=...
    ```
 
 5. Deploy:

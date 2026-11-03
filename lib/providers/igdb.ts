@@ -1,7 +1,6 @@
 import { fetchJson, NotFoundError } from "@/lib/http";
 import { mediaId, type ListName, type Media, type SteamMatch } from "@/lib/types";
 
-const IGDB_URL = "https://api.igdb.com/v4";
 const TOKEN_URL = "https://id.twitch.tv/oauth2/token";
 const IMAGE_URL = "https://images.igdb.com/igdb/image/upload";
 const EROTIC_THEME_ID = 42;
@@ -88,8 +87,18 @@ async function getToken(): Promise<string> {
   return token.value;
 }
 
+function apiUrl(): string {
+  const url = process.env.IGDB_API_URL;
+
+  if (!url) {
+    throw new Error("IGDB_API_URL must be set");
+  }
+
+  return url;
+}
+
 async function queryIgdb<T>(endpoint: string, body: string): Promise<T[]> {
-  return fetchJson<T[]>(`${IGDB_URL}/${endpoint}`, {
+  return fetchJson<T[]>(`${apiUrl()}/${endpoint}`, {
     method: "POST",
     headers: {
       "Client-ID": process.env.IGDB_CLIENT_ID ?? "",

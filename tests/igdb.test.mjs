@@ -3,6 +3,7 @@ import assert from "node:assert/strict";
 
 process.env.IGDB_CLIENT_ID = "test-client";
 process.env.IGDB_CLIENT_SECRET = "test-secret";
+process.env.IGDB_API_URL = "https://igdb.test/v4";
 
 const { searchIgdb } = await import("@/lib/providers/igdb");
 

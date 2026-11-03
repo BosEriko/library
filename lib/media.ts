@@ -3,14 +3,12 @@ import { after } from "next/server";
 import { getDb } from "@/lib/firebase";
 import { AdultContentError, errorMessage } from "@/lib/http";
 import { deleteImage, storeImage, type StoredImage } from "@/lib/images";
-import { getAniList } from "@/lib/providers/anilist";
+import { getAnimeManga } from "@/lib/providers/anime-manga";
 import { getIgdb } from "@/lib/providers/igdb";
 import { acquireLock } from "@/lib/redis";
 import {
   hasCurrentSource,
   mediaId,
-  savedWithMalIds,
-  withCurrentSource,
   type Media,
   type MediaType,
   type StoredMedia,
@@ -34,7 +32,7 @@ type MediaDocument = Media & {
 };
 
 function fetchFromProvider(type: MediaType, id: string): Promise<Media> {
-  return type === "GAME" ? getIgdb(id) : getAniList(id, type);
+  return type === "GAME" ? getIgdb(id) : getAnimeManga(id, type);
 }
 
 function toStoredMedia(doc: MediaDocument): StoredMedia {
@@ -43,7 +41,7 @@ function toStoredMedia(doc: MediaDocument): StoredMedia {
   delete media.images;
 
   return {
-    ...withCurrentSource(media),
+    ...media,
     createdAt: doc.createdAt.toDate().toISOString(),
     updatedAt: doc.updatedAt.toDate().toISOString(),
   };
@@ -145,7 +143,7 @@ export async function getOrFetchMedia(
   const ref = getDb().collection(COLLECTION).doc(mediaId(type, id));
   const snapshot = await ref.get();
   const saved = snapshot.exists ? (snapshot.data() as MediaDocument) : null;
-  const existing = saved && savedWithMalIds(saved) ? saved : null;
+  const existing = saved && hasCurrentSource(saved) ? saved : null;
 
   if (existing && isFresh(existing)) {
     assertAllowed(existing, allowAdult);

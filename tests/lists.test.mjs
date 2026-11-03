@@ -17,8 +17,8 @@ mock.module("@/lib/firebase", {
     }),
   },
 });
-mock.module("@/lib/providers/anilist", {
-  namedExports: { listAniList: async () => fetched },
+mock.module("@/lib/providers/anime-manga", {
+  namedExports: { listAnimeManga: async () => fetched },
 });
 mock.module("@/lib/providers/igdb", {
   namedExports: { listIgdb: async () => fetched },
@@ -47,17 +47,8 @@ test("a fresh list saved with MyAnimeList ids is returned as is", async () => {
   assert.deepEqual(list.items.map((media) => media.sourceId), ["21"]);
 });
 
-test("a fresh list with the old AniList source is rebuilt", async () => {
-  docs.set("ANIME_top", savedList([item("21", "anilist", { anilistId: 21 })]));
-
-  const { list } = await getOrFetchList("ANIME", "top", false);
-
-  assert.deepEqual(list.items.map((media) => media.sourceId), ["52991"]);
-  assert.equal(docs.get("ANIME_top").items[0].source.provider, "myanimelist");
-});
-
-test("a list saved under AniList ids is rebuilt", async () => {
-  docs.set("ANIME_top", savedList([item("154587", "anilist", { malId: 52991 })]));
+test("a fresh list with an older source is rebuilt", async () => {
+  docs.set("ANIME_top", savedList([item("154587", "older")]));
 
   const { list, stale } = await getOrFetchList("ANIME", "top", false);
 

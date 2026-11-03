@@ -1,6 +1,6 @@
 import { REDIS_TTL_SECONDS } from "@/lib/cache";
 import { errorMessage } from "@/lib/http";
-import { searchAniList } from "@/lib/providers/anilist";
+import { searchAnimeManga } from "@/lib/providers/anime-manga";
 import { searchIgdb } from "@/lib/providers/igdb";
 import { getCached, setCached } from "@/lib/redis";
 import { hasCurrentSource, type Media, type MediaSegment } from "@/lib/types";
@@ -16,8 +16,8 @@ async function fetchAll(
   allowAdult: boolean,
 ): Promise<SearchResults> {
   const searches: Record<MediaSegment, Promise<Media[]>> = {
-    anime: searchAniList(query, "ANIME", limit, allowAdult),
-    manga: searchAniList(query, "MANGA", limit, allowAdult),
+    anime: searchAnimeManga(query, "ANIME", limit, allowAdult),
+    manga: searchAnimeManga(query, "MANGA", limit, allowAdult),
     game: searchIgdb(query, limit, allowAdult),
   };
 

@@ -1,16 +1,18 @@
 import test, { mock } from "node:test";
 import assert from "node:assert/strict";
-import { getAniList, listAniList, searchAniList } from "@/lib/providers/anilist";
 import { NotFoundError } from "@/lib/http";
+
+process.env.ANIME_MANGA_API_URL = "https://anime-manga.test/graphql";
+
+const { getAnimeManga, listAnimeManga, searchAnimeManga } = await import("@/lib/providers/anime-manga");
 
 const anime = {
   id: 154587,
   idMal: 52991,
-  siteUrl: "https://anilist.co/anime/154587",
   title: { romaji: "Sousou no Frieren", english: "Frieren: Beyond Journey's End", native: "葬送のフリーレン" },
   synonyms: ["Frieren: Beyond Journey's End"],
-  coverImage: { extraLarge: "https://s4.anilist.co/cover.png", large: null },
-  bannerImage: "https://s4.anilist.co/banner.jpg",
+  coverImage: { extraLarge: "https://images.test/cover.png", large: null },
+  bannerImage: "https://images.test/banner.jpg",
   description: "An elf mage<br><br>keeps <i>travelling</i>.",
   format: "TV",
   status: "FINISHED",
@@ -29,16 +31,16 @@ const anime = {
   staff: { edges: [] },
 };
 
-function mockAniList(data) {
+function mockApi(data) {
   return mock.method(globalThis, "fetch", async () => Response.json({ data }));
 }
 
 test.afterEach(() => mock.restoreAll());
 
-test("search normalizes AniList media into the shared schema", async () => {
-  mockAniList({ Page: { media: [anime] } });
+test("search normalizes anime and manga into the shared schema", async () => {
+  mockApi({ Page: { media: [anime] } });
 
-  const [media] = await searchAniList("frieren", "ANIME", 5, false);
+  const [media] = await searchAnimeManga("frieren", "ANIME", 5, false);
 
   assert.equal(media.id, "ANIME_52991");
   assert.equal(media.sourceId, "52991");
@@ -48,7 +50,7 @@ test("search normalizes AniList media into the shared schema", async () => {
   assert.equal(media.score, 9.1);
   assert.equal(media.year, 2023);
   assert.equal(media.isAdult, false);
-  assert.equal(media.coverImage, "https://s4.anilist.co/cover.png");
+  assert.equal(media.coverImage, "https://images.test/cover.png");
   assert.deepEqual(media.source, {
     provider: "myanimelist",
     url: "https://myanimelist.net/anime/52991",
@@ -66,12 +68,12 @@ test("search normalizes AniList media into the shared schema", async () => {
 
 test("titles without a MyAnimeList id are left out of search and lists", async () => {
   const withoutMal = { ...anime, id: 1, idMal: null };
-  const fetch = mockAniList({
+  const fetch = mockApi({
     Page: { media: [withoutMal, anime, { ...anime, id: 2, idMal: 3 }, { ...anime, id: 4, idMal: 5 }] },
   });
 
-  const search = await searchAniList("frieren", "ANIME", 2, false);
-  const list = await listAniList("ANIME", "top", 2, false);
+  const search = await searchAnimeManga("frieren", "ANIME", 2, false);
+  const list = await listAnimeManga("ANIME", "top", 2, false);
 
   assert.deepEqual(search.map((media) => media.sourceId), ["52991", "3"]);
   assert.deepEqual(list.map((media) => media.sourceId), ["52991", "3"]);
@@ -81,23 +83,23 @@ test("titles without a MyAnimeList id are left out of search and lists", async (
 });
 
 test("profiles are looked up by MyAnimeList id", async () => {
-  const fetch = mockAniList({ Media: anime });
+  const fetch = mockApi({ Media: anime });
 
-  const media = await getAniList("52991", "ANIME");
+  const media = await getAnimeManga("52991", "ANIME");
 
   const body = JSON.parse(fetch.mock.calls[0].arguments[1].body);
   assert.match(body.query, /Media\(idMal: \$id, type: \$type\)/);
   assert.deepEqual(body.variables, { id: 52991, type: "ANIME" });
   assert.equal(media.id, "ANIME_52991");
   assert.equal(media.source.url, "https://myanimelist.net/anime/52991");
-  assert.equal("anilistId" in media.details, false);
+  assert.equal(String(fetch.mock.calls[0].arguments[0]), "https://anime-manga.test/graphql");
 });
 
 test("search excludes adult titles unless they are allowed", async () => {
-  const fetch = mockAniList({ Page: { media: [] } });
+  const fetch = mockApi({ Page: { media: [] } });
 
-  await searchAniList("frieren", "ANIME", 5, false);
-  await searchAniList("frieren", "ANIME", 5, true);
+  await searchAnimeManga("frieren", "ANIME", 5, false);
+  await searchAnimeManga("frieren", "ANIME", 5, true);
 
   const [safe, adult] = fetch.mock.calls.map((call) => JSON.parse(call.arguments[1].body).query);
   assert.match(safe, /isAdult: false/);
@@ -105,7 +107,7 @@ test("search excludes adult titles unless they are allowed", async () => {
 });
 
 test("manga authors are listed once even with both story and art roles", async () => {
-  mockAniList({
+  mockApi({
     Media: {
       ...anime,
       format: "MANGA",
@@ -122,7 +124,7 @@ test("manga authors are listed once even with both story and art roles", async (
     },
   });
 
-  const media = await getAniList("52991", "MANGA");
+  const media = await getAnimeManga("52991", "MANGA");
 
   assert.equal(media.id, "MANGA_52991");
   assert.equal(media.source.url, "https://myanimelist.net/manga/52991");
@@ -131,7 +133,18 @@ test("manga authors are listed once even with both story and art roles", async (
 });
 
 test("a missing title is reported as not found", async () => {
-  mockAniList({ Media: null });
+  mockApi({ Media: null });
 
-  await assert.rejects(getAniList("999999999", "ANIME"), NotFoundError);
+  await assert.rejects(getAnimeManga("999999999", "ANIME"), NotFoundError);
+});
+
+test("a missing API address is reported", async () => {
+  const url = process.env.ANIME_MANGA_API_URL;
+  delete process.env.ANIME_MANGA_API_URL;
+
+  try {
+    await assert.rejects(getAnimeManga("52991", "ANIME"), /ANIME_MANGA_API_URL must be set/);
+  } finally {
+    process.env.ANIME_MANGA_API_URL = url;
+  }
 });

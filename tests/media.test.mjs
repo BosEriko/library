@@ -27,8 +27,8 @@ function fakeDb() {
 }
 
 mock.module("@/lib/firebase", { namedExports: { getDb: fakeDb } });
-mock.module("@/lib/providers/anilist", {
-  namedExports: { getAniList: (...args) => provider(...args) },
+mock.module("@/lib/providers/anime-manga", {
+  namedExports: { getAnimeManga: (...args) => provider(...args) },
 });
 mock.module("@/lib/providers/igdb", {
   namedExports: { getIgdb: (...args) => provider(...args) },
@@ -200,10 +200,10 @@ test("the saved copy is returned when the provider fails", async () => {
   assert.equal(result.title, "Title");
 });
 
-const aniListSource = { provider: "anilist", url: "https://anilist.co/anime/100" };
+const olderSource = { provider: "older", url: "https://older.test/anime/100" };
 
-test("a copy saved under its AniList id is replaced, never returned", async () => {
-  docs.set("ANIME_1", savedDoc(5, { title: "Another title", source: aniListSource, details: {} }));
+test("a copy with an older source is replaced, never returned", async () => {
+  docs.set("ANIME_1", savedDoc(5, { title: "Another title", source: olderSource, details: {} }));
   provider = async () => media();
 
   const result = await getOrFetchMedia("ANIME", "1", false);
@@ -213,29 +213,13 @@ test("a copy saved under its AniList id is replaced, never returned", async () =
   assert.equal(docs.get("ANIME_1").source.provider, "myanimelist");
 });
 
-test("a copy saved under its AniList id isn't used when the provider fails", async () => {
-  docs.set("ANIME_1", savedDoc(5, { title: "Another title", source: aniListSource, details: {} }));
+test("a copy with an older source isn't used when the provider fails", async () => {
+  docs.set("ANIME_1", savedDoc(5, { title: "Another title", source: olderSource, details: {} }));
   provider = async () => {
     throw new Error("provider down");
   };
 
   await assert.rejects(getOrFetchMedia("ANIME", "1", false), /provider down/);
-});
-
-test("a copy with the old AniList source is returned without it and refreshed", async () => {
-  docs.set("ANIME_1", savedDoc(5, { source: aniListSource, details: { anilistId: 100, format: "TV" } }));
-  provider = async () => media({ details: { format: "TV" } });
-
-  const result = await getOrFetchMedia("ANIME", "1", false);
-
-  assert.deepEqual(result.source, { provider: "myanimelist", url: "https://myanimelist.net/anime/1" });
-  assert.deepEqual(result.details, { format: "TV" });
-  assert.equal(scheduled.length, 1);
-
-  await scheduled[0]();
-
-  assert.equal(docs.get("ANIME_1").source.provider, "myanimelist");
-  assert.deepEqual(events, ["set ANIME_1"]);
 });
 
 const savedGame = {

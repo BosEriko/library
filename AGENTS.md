@@ -10,7 +10,7 @@ This block is written and re-added by `next dev` — verify at `node_modules/nex
 
 ## Always cache third-party requests
 
-Every request to a third-party service must be cached. This covers AniList, IGDB, the Twitch OAuth token endpoint, provider image CDNs and any provider added later. Never add a code path that calls a provider on every incoming request.
+Every request to a third-party service must be cached. This covers the anime and manga API, IGDB, the Twitch OAuth token endpoint, provider image CDNs and any provider added later. Never add a code path that calls a provider on every incoming request.
 
 - **Cache headers.** Every API route that reaches a provider sets `Cache-Control` with the helpers in `lib/cache.ts`: `CACHE_LONG` for normal responses, or `cacheFor()` when the data has its own expiry. Use `CACHE_SHORT` for partial results and 4xx responses, and `CACHE_NONE` only for errors, so a failure is never cached for long. Query parameters that change the result, such as `adult`, must stay in the URL so each variant is cached separately.
 - **Firestore.** Data for a single item or a list is saved with an `updatedAt` timestamp and served from Firestore until it expires. An expired profile is still returned right away and refreshed in the background with `after()`. Follow `getOrFetchMedia` in `lib/media.ts` (`media` collection, 30 days) and `getOrFetchList` in `lib/lists.ts` (`lists` collection, 24 hours). If the provider fails and a saved copy exists, return the saved copy instead of an error.

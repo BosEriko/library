@@ -60,10 +60,6 @@ export interface SteamMatch {
   isAdult: boolean;
 }
 
-export function savedWithMalIds(media: Media): boolean {
-  return hasCurrentSource(media) || media.details?.anilistId !== undefined;
-}
-
 export function hasCurrentSource(media: Media): boolean {
   return media.type === "GAME" || media.source?.provider === "myanimelist";
 }
@@ -73,18 +69,6 @@ export function malSource(type: MediaType, malId: string | number): Media["sourc
     provider: "myanimelist",
     url: `https://myanimelist.net/${type.toLowerCase()}/${malId}`,
   };
-}
-
-export function withCurrentSource<T extends Media>(media: T): T {
-  if (hasCurrentSource(media)) {
-    return media;
-  }
-
-  const details = { ...media.details };
-
-  delete details.anilistId;
-
-  return { ...media, source: malSource(media.type, media.sourceId), details };
 }
 
 export function mediaId(type: MediaType, sourceId: string | number): string {

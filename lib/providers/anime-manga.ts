@@ -1,10 +1,9 @@
 import { fetchJson, NotFoundError } from "@/lib/http";
 import { malSource, mediaId, type ListName, type Media } from "@/lib/types";
 
-const ANILIST_URL = "https://graphql.anilist.co";
 const PAGE_SIZE = 50;
 
-type AniListType = "ANIME" | "MANGA";
+type AnimeMangaType = "ANIME" | "MANGA";
 
 const MEDIA_FIELDS = `
   idMal
@@ -76,7 +75,7 @@ function fuzzyDate(date: Date): number {
   return date.getUTCFullYear() * 10000 + (date.getUTCMonth() + 1) * 100 + date.getUTCDate();
 }
 
-function listVariables(list: ListName, type: AniListType, now: Date): Record<string, unknown> {
+function listVariables(list: ListName, type: AnimeMangaType, now: Date): Record<string, unknown> {
   switch (list) {
     case "trending":
       return { sort: ["TRENDING_DESC", "POPULARITY_DESC"] };
@@ -105,13 +104,13 @@ const MEDIA_QUERY = `
   }
 `;
 
-interface AniListDate {
+interface ProviderDate {
   year: number | null;
   month: number | null;
   day: number | null;
 }
 
-interface AniListMedia {
+interface ProviderMedia {
   idMal: number | null;
   title: { romaji: string | null; english: string | null; native: string | null };
   synonyms: string[];
@@ -122,8 +121,8 @@ interface AniListMedia {
   status: string | null;
   season: string | null;
   seasonYear: number | null;
-  startDate: AniListDate;
-  endDate: AniListDate;
+  startDate: ProviderDate;
+  endDate: ProviderDate;
   genres: string[];
   averageScore: number | null;
   isAdult: boolean;
@@ -135,21 +134,31 @@ interface AniListMedia {
   staff: { edges: { role: string; node: { name: { full: string } } }[] } | null;
 }
 
-async function queryAniList<T>(query: string, variables: Record<string, unknown>): Promise<T> {
-  const response = await fetchJson<{ data: T | null }>(ANILIST_URL, {
+function apiUrl(): string {
+  const url = process.env.ANIME_MANGA_API_URL;
+
+  if (!url) {
+    throw new Error("ANIME_MANGA_API_URL must be set");
+  }
+
+  return url;
+}
+
+async function queryApi<T>(query: string, variables: Record<string, unknown>): Promise<T> {
+  const response = await fetchJson<{ data: T | null }>(apiUrl(), {
     method: "POST",
     headers: { "Content-Type": "application/json", Accept: "application/json" },
     body: JSON.stringify({ query, variables }),
   });
 
   if (!response.data) {
-    throw new Error("AniList returned no data");
+    throw new Error("The anime and manga API returned no data");
   }
 
   return response.data;
 }
 
-function toIsoDate(date: AniListDate): string | null {
+function toIsoDate(date: ProviderDate): string | null {
   if (!date.year) {
     return null;
   }
@@ -157,7 +166,7 @@ function toIsoDate(date: AniListDate): string | null {
   return new Date(Date.UTC(date.year, (date.month ?? 1) - 1, date.day ?? 1)).toISOString();
 }
 
-function normalize(media: AniListMedia, malId: number, type: AniListType): Media {
+function normalize(media: ProviderMedia, malId: number, type: AnimeMangaType): Media {
   const title = media.title.romaji ?? media.title.english ?? media.title.native ?? "";
   const altTitles = [media.title.english, media.title.native, ...media.synonyms].filter(
     (alt): alt is string => Boolean(alt) && alt !== title,
@@ -214,19 +223,19 @@ function normalize(media: AniListMedia, malId: number, type: AniListType): Media
   };
 }
 
-function withMalIds(media: AniListMedia[], type: AniListType, limit: number): Media[] {
+function withMalIds(media: ProviderMedia[], type: AnimeMangaType, limit: number): Media[] {
   return media
     .flatMap((item) => (item.idMal === null ? [] : [normalize(item, item.idMal, type)]))
     .slice(0, limit);
 }
 
-export async function searchAniList(
+export async function searchAnimeManga(
   query: string,
-  type: AniListType,
+  type: AnimeMangaType,
   limit: number,
   allowAdult: boolean,
 ): Promise<Media[]> {
-  const data = await queryAniList<{ Page: { media: AniListMedia[] } }>(searchQuery(allowAdult), {
+  const data = await queryApi<{ Page: { media: ProviderMedia[] } }>(searchQuery(allowAdult), {
     search: query,
     type,
     perPage: PAGE_SIZE,
@@ -235,13 +244,13 @@ export async function searchAniList(
   return withMalIds(data.Page.media, type, limit);
 }
 
-export async function listAniList(
-  type: AniListType,
+export async function listAnimeManga(
+  type: AnimeMangaType,
   list: ListName,
   limit: number,
   allowAdult: boolean,
 ): Promise<Media[]> {
-  const data = await queryAniList<{ Page: { media: AniListMedia[] } }>(listQuery(allowAdult), {
+  const data = await queryApi<{ Page: { media: ProviderMedia[] } }>(listQuery(allowAdult), {
     type,
     perPage: PAGE_SIZE,
     ...listVariables(list, type, new Date()),
@@ -250,8 +259,8 @@ export async function listAniList(
   return withMalIds(data.Page.media, type, limit);
 }
 
-export async function getAniList(id: string, type: AniListType): Promise<Media> {
-  const data = await queryAniList<{ Media: AniListMedia | null }>(MEDIA_QUERY, {
+export async function getAnimeManga(id: string, type: AnimeMangaType): Promise<Media> {
+  const data = await queryApi<{ Media: ProviderMedia | null }>(MEDIA_QUERY, {
     id: Number(id),
     type,
   });

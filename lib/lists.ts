@@ -1,6 +1,6 @@
 import { Timestamp } from "firebase-admin/firestore";
 import { getDb } from "@/lib/firebase";
-import { listAniList } from "@/lib/providers/anilist";
+import { listAnimeManga } from "@/lib/providers/anime-manga";
 import { listIgdb } from "@/lib/providers/igdb";
 import { hasCurrentSource, type ListName, type Media, type MediaList, type MediaType } from "@/lib/types";
 
@@ -25,7 +25,7 @@ export interface ListResult {
 function fetchList(type: MediaType, list: ListName, allowAdult: boolean): Promise<Media[]> {
   return type === "GAME"
     ? listIgdb(list, LIST_SIZE, allowAdult)
-    : listAniList(type, list, LIST_SIZE, allowAdult);
+    : listAnimeManga(type, list, LIST_SIZE, allowAdult);
 }
 
 function toMediaList(doc: ListDocument): MediaList {
