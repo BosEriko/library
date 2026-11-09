@@ -22,10 +22,15 @@ export interface ListResult {
   stale: boolean;
 }
 
-function fetchList(type: MediaType, list: ListName, allowAdult: boolean): Promise<Media[]> {
+export function fetchList(
+  type: MediaType,
+  list: ListName,
+  allowAdult: boolean,
+  status?: "RELEASING",
+): Promise<Media[]> {
   return type === "GAME"
     ? listIgdb(list, LIST_SIZE, allowAdult)
-    : listAnimeManga(type, list, LIST_SIZE, allowAdult);
+    : listAnimeManga(type, list, LIST_SIZE, allowAdult, status);
 }
 
 function toMediaList(doc: ListDocument): MediaList {

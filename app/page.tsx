@@ -7,6 +7,7 @@ const SECTIONS = [
   { id: "images", label: "Images" },
   { id: "steam", label: "Steam" },
   { id: "lists", label: "Lists" },
+  { id: "charts", label: "Charts" },
   { id: "schema", label: "Media schema" },
   { id: "caching", label: "Caching" },
   { id: "errors", label: "Errors" },
@@ -53,6 +54,37 @@ const LISTS = [
   { list: "upcoming", anime: "Not yet released, most popular first.", manga: "Not yet released, most popular first.", game: "Not yet released, most anticipated first." },
 ];
 
+const CHART_PARAMS = [
+  { name: "type", type: "string", required: true, description: "One of anime, manga or game." },
+];
+
+const CHART_QUERY_PARAMS = [
+  { name: "week", type: "string", required: false, description: "An ISO week such as 2026-W46. Weeks start on Monday at 00:00 UTC. Defaults to the current week." },
+  { name: "adult", type: "boolean", required: false, description: "Set to true to include 18+ titles. They are excluded by default, and each version is a separate chart." },
+];
+
+const CHARTS = [
+  { type: "anime", ranking: "Trending titles that are currently airing." },
+  { type: "manga", ranking: "Trending titles that are currently publishing." },
+  { type: "game", ranking: "The most visited games, as in the trending list." },
+];
+
+const CHART_FIELDS = [
+  { name: "type", type: '"ANIME" | "MANGA" | "GAME"', description: "Media type of the chart." },
+  { name: "week", type: "string", description: "The ISO week of the chart, e.g. 2026-W46." },
+  { name: "startsAt", type: "string", description: "ISO date the week starts, Monday 00:00 UTC." },
+  { name: "endsAt", type: "string", description: "ISO date the week ends, the next Monday 00:00 UTC." },
+  { name: "previousWeek", type: "string | null", description: "The nearest earlier week with a saved chart, or null." },
+  { name: "nextWeek", type: "string | null", description: "The nearest later week with a saved chart, or null." },
+  { name: "entries[].rank", type: "number", description: "Position on the chart, starting at 1." },
+  { name: "entries[].previousRank", type: "number | null", description: "Position on the previous saved chart, or null if the title wasn't on it." },
+  { name: "entries[].movement", type: '"up" | "down" | "same" | "new"', description: "How the title moved since the previous saved chart." },
+  { name: "entries[].weeksOnChart", type: "number", description: "Saved charts in a row the title has been on, counting this one." },
+  { name: "entries[].peak", type: "number", description: "The title's best position on any saved chart." },
+  { name: "entries[].media", type: "object", description: "The title, in the same shape as list items." },
+  { name: "updatedAt", type: "string", description: "ISO date the chart was built." },
+];
+
 const SCHEMA_FIELDS = [
   { name: "id", type: "string", description: "Type and source id joined, e.g. ANIME_52991. Also the Firestore document id." },
   { name: "type", type: '"ANIME" | "MANGA" | "GAME"', description: "Media type." },
@@ -82,7 +114,7 @@ const DETAILS = [
 const ERRORS = [
   { status: "400", when: "Search was called without q, q is longer than 100 characters, or Steam was called without valid ids." },
   { status: "403", when: "An 18+ title was requested without adult=true. The body is { \"error\": \"Adult content\" }." },
-  { status: "404", when: "Unknown type, list or image, non-numeric id, no item with that id, or an item without that image." },
+  { status: "404", when: "Unknown type, list or image, non-numeric id, no item with that id, an item without that image, or a chart week that is malformed, in the future or was never saved." },
   { status: "429", when: "More than 60 requests in a minute from the same address, or 300 for images. The Retry-After header says how many seconds to wait." },
   { status: "502", when: "The provider or database failed and no saved copy could be returned." },
 ];
@@ -150,6 +182,33 @@ const LIST_RESPONSE = `{
     …
   ],
   "updatedAt": "2026-10-31T08:00:00.000Z"
+}`;
+
+const CHART_RESPONSE = `{
+  "type": "ANIME",
+  "week": "2026-W46",
+  "startsAt": "2026-11-09T00:00:00.000Z",
+  "endsAt": "2026-11-16T00:00:00.000Z",
+  "previousWeek": "2026-W45",
+  "nextWeek": null,
+  "entries": [
+    {
+      "rank": 1,
+      "previousRank": 3,
+      "movement": "up",
+      "weeksOnChart": 6,
+      "peak": 1,
+      "media": {
+        "id": "ANIME_52991",
+        "type": "ANIME",
+        "sourceId": "52991",
+        "title": "Sousou no Frieren",
+        …
+      }
+    },
+    …
+  ],
+  "updatedAt": "2026-11-09T08:00:00.000Z"
 }`;
 
 const PROFILE_RESPONSE = `{
@@ -370,6 +429,76 @@ export default function Home() {
           </p>
         </section>
 
+        <section id="charts" className={styles.section}>
+          <h2>Charts</h2>
+          <Endpoint path="/api/charts/{type}?week={week}" />
+          <p>
+            Returns the weekly chart for a type: up to 20 titles ranked by what&apos;s trending
+            that week, with how each one moved since the previous chart. Items follow the media
+            schema, so any of them can be opened with the profile endpoint.
+          </p>
+          <p>
+            The first request of a week builds that week&apos;s chart and saves it, and the saved
+            chart never changes after that. Movement compares against the most recent earlier
+            saved chart, which can be more than a week old if no chart was requested in between.
+            Past weeks that were never saved are not built afterwards. Covers and banners are
+            copied to the library&apos;s own storage when the chart is built, so they keep working
+            for past weeks.
+          </p>
+
+          <h3>Path parameters</h3>
+          <Params rows={CHART_PARAMS} />
+
+          <h3>Query parameters</h3>
+          <Params rows={CHART_QUERY_PARAMS} />
+
+          <h3>How each chart is ranked</h3>
+          <table className={styles.table}>
+            <thead>
+              <tr>
+                <th scope="col">Type</th>
+                <th scope="col">Ranking</th>
+              </tr>
+            </thead>
+            <tbody>
+              {CHARTS.map((row) => (
+                <tr key={row.type}>
+                  <td>
+                    <code className={styles.name}>{row.type}</code>
+                  </td>
+                  <td>{row.ranking}</td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+
+          <h3>Fields</h3>
+          <table className={styles.table}>
+            <thead>
+              <tr>
+                <th scope="col">Field</th>
+                <th scope="col">Type</th>
+                <th scope="col">Description</th>
+              </tr>
+            </thead>
+            <tbody>
+              {CHART_FIELDS.map((field) => (
+                <tr key={field.name}>
+                  <td>
+                    <code className={styles.name}>{field.name}</code>
+                  </td>
+                  <td className={styles.type}>{field.type}</td>
+                  <td>{field.description}</td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+
+          <h3>Example</h3>
+          <Example label="Request">{"curl '/api/charts/anime?week=2026-W46'"}</Example>
+          <Example label="Response">{CHART_RESPONSE}</Example>
+        </section>
+
         <section id="schema" className={styles.section}>
           <h2>Media schema</h2>
           <p>Search results and profiles share the same shape for every type.</p>
@@ -434,6 +563,13 @@ export default function Home() {
               <strong>Lists, 1 day.</strong> Each list is saved to Firestore and rebuilt from the
               provider once the saved copy is a day old. If the provider is unavailable, the older
               copy is returned.
+            </li>
+            <li>
+              <strong>Charts, until the week ends.</strong> Each week&apos;s chart is saved to
+              Firestore on the first request of the week and is never rebuilt. The current week is
+              cached until it ends. A past week is cached for 7 days once a later chart exists, and
+              until the current week ends before that. If the provider is unavailable, nothing is
+              saved or cached, so a later request tries again.
             </li>
             <li>
               <strong>Images, 1 hour.</strong> Browsers keep each redirect for an hour, then ask

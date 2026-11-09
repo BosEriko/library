@@ -82,6 +82,21 @@ test("titles without a MyAnimeList id are left out of search and lists", async (
   }
 });
 
+test("the trending list can be limited to titles that are currently releasing", async () => {
+  const fetch = mockApi({ Page: { media: [anime] } });
+
+  await listAnimeManga("MANGA", "trending", 20, false, "RELEASING");
+  await listAnimeManga("MANGA", "trending", 20, false);
+
+  const [releasing, trending] = fetch.mock.calls.map(
+    (call) => JSON.parse(call.arguments[1].body).variables,
+  );
+  assert.equal(releasing.status, "RELEASING");
+  assert.deepEqual(releasing.sort, ["TRENDING_DESC", "POPULARITY_DESC"]);
+  assert.equal(trending.status, undefined);
+  assert.deepEqual(trending.sort, ["TRENDING_DESC", "POPULARITY_DESC"]);
+});
+
 test("profiles are looked up by MyAnimeList id", async () => {
   const fetch = mockApi({ Media: anime });
 

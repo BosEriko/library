@@ -57,22 +57,39 @@ async function listFiles() {
 async function listUsedKeys() {
   const prefix = `${publicUrl}/`;
   const keys = new Set();
-  const snapshot = await db.collection("media").get();
-
-  snapshot.forEach((doc) => {
-    const media = doc.data();
-    const urls = [
-      media.coverImage,
-      media.bannerImage,
-      media.images?.coverImage?.url,
-      media.images?.bannerImage?.url,
-    ];
-
+  const [snapshot, charts] = await Promise.all([
+    db.collection("media").get(),
+    db.collection("charts").get(),
+  ]);
+  const addKeys = (urls) => {
     for (const url of urls) {
       if (typeof url === "string" && url.startsWith(prefix)) {
         keys.add(url.slice(prefix.length));
       }
     }
+  };
+
+  snapshot.forEach((doc) => {
+    const media = doc.data();
+
+    addKeys([
+      media.coverImage,
+      media.bannerImage,
+      media.images?.coverImage?.url,
+      media.images?.bannerImage?.url,
+    ]);
+  });
+
+  charts.forEach((doc) => {
+    const chart = doc.data();
+
+    addKeys([
+      ...(chart.entries ?? []).flatMap((entry) => [entry.media.coverImage, entry.media.bannerImage]),
+      ...Object.values(chart.images ?? {}).flatMap((images) => [
+        images.coverImage?.url,
+        images.bannerImage?.url,
+      ]),
+    ]);
   });
 
   return keys;

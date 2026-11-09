@@ -80,10 +80,10 @@ fly deploy
 
 ### Cleaning up images
 
-Images that no profile uses anymore stay in the bucket, for example after deleting Firestore entries. List them with:
+Images that no profile or chart uses anymore stay in the bucket, for example after deleting Firestore entries. List them with:
 
 ```bash
 pnpm storage:clean
 ```
 
-Then delete them with `pnpm storage:clean --delete`. Files uploaded in the last 10 minutes are skipped, so a profile that is being saved isn't affected. This uses the storage and Firebase values in `.env.local`, which point at production.
+Then delete them with `pnpm storage:clean --delete`. Files uploaded in the last 10 minutes are skipped, so a profile or chart that is being saved isn't affected. This uses the storage and Firebase values in `.env.local`, which point at production.

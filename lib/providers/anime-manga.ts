@@ -249,11 +249,13 @@ export async function listAnimeManga(
   list: ListName,
   limit: number,
   allowAdult: boolean,
+  status?: "RELEASING",
 ): Promise<Media[]> {
   const data = await queryApi<{ Page: { media: ProviderMedia[] } }>(listQuery(allowAdult), {
     type,
     perPage: PAGE_SIZE,
     ...listVariables(list, type, new Date()),
+    ...(status ? { status } : {}),
   });
 
   return withMalIds(data.Page.media, type, limit);

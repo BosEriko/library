@@ -50,6 +50,28 @@ export interface MediaList {
   updatedAt: string;
 }
 
+export type ChartMovement = "up" | "down" | "same" | "new";
+
+export interface ChartEntry {
+  rank: number;
+  previousRank: number | null;
+  movement: ChartMovement;
+  weeksOnChart: number;
+  peak: number;
+  media: Media;
+}
+
+export interface Chart {
+  type: MediaType;
+  week: string;
+  startsAt: string;
+  endsAt: string;
+  previousWeek: string | null;
+  nextWeek: string | null;
+  entries: ChartEntry[];
+  updatedAt: string;
+}
+
 export interface SteamMatch {
   id: string;
   type: "GAME";
