@@ -1,4 +1,4 @@
-import { DeleteObjectCommand, PutObjectCommand, S3Client } from "@aws-sdk/client-s3";
+import { PutObjectCommand, S3Client } from "@aws-sdk/client-s3";
 import { randomUUID } from "node:crypto";
 import sharp from "sharp";
 import { errorMessage } from "@/lib/http";
@@ -40,20 +40,6 @@ function keyFor(url: string): string | null {
   const prefix = `${process.env.STORAGE_PUBLIC_URL}/`;
 
   return url.startsWith(prefix) ? url.slice(prefix.length) : null;
-}
-
-export async function deleteImage(image: StoredImage): Promise<void> {
-  const key = keyFor(image.url);
-
-  if (!key) {
-    return;
-  }
-
-  try {
-    await getClient().send(new DeleteObjectCommand({ Bucket: process.env.BUCKET_NAME, Key: key }));
-  } catch (error) {
-    console.warn(`Failed to delete image ${image.url}: ${errorMessage(error)}`);
-  }
 }
 
 async function minimize(image: ArrayBuffer, maxWidth: number): Promise<Buffer> {

@@ -386,7 +386,8 @@ export default function Home() {
             Returns up to 20 titles for a ready-made list, such as what&apos;s trending or the
             highest rated. Items follow the media schema, so any of them can be opened with the
             profile endpoint. Anime and manga without a MyAnimeList id are left out, so a list can
-            have fewer than 20 titles or none.
+            have fewer than 20 titles or none. Every title in a list is saved as a profile, and its
+            covers and banners point at the library&apos;s own copies.
           </p>
 
           <h3>Path parameters</h3>
@@ -441,9 +442,9 @@ export default function Home() {
             The first request of a week builds that week&apos;s chart and saves it, and the saved
             chart never changes after that. Movement compares against the most recent earlier
             saved chart, which can be more than a week old if no chart was requested in between.
-            Past weeks that were never saved are not built afterwards. Covers and banners are
-            copied to the library&apos;s own storage when the chart is built, so they keep working
-            for past weeks.
+            Past weeks that were never saved are not built afterwards. Every title on a chart is
+            saved as a profile when the chart is built, and its covers and banners point at the
+            library&apos;s own copies, so they keep working for past weeks.
           </p>
 
           <h3>Path parameters</h3>

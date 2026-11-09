@@ -109,3 +109,17 @@ export async function acquireLock(key: string, ttlSeconds: number): Promise<bool
     return true;
   }
 }
+
+export async function releaseLock(key: string): Promise<void> {
+  const redis = await getRedis();
+
+  if (!redis) {
+    return;
+  }
+
+  try {
+    await redis.del(key);
+  } catch (error) {
+    console.warn(`Redis unlock failed: ${errorMessage(error)}`);
+  }
+}

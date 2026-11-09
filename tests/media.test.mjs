@@ -11,6 +11,8 @@ let provider = async () => {
   throw new Error("provider not set");
 };
 let lockAcquired = true;
+let failWrites = false;
+const heldLocks = new Set();
 
 function fakeDb() {
   return {
@@ -18,6 +20,7 @@ function fakeDb() {
       doc: (id) => ({
         get: async () => ({ exists: docs.has(id), data: () => docs.get(id) }),
         set: async (data) => {
+          if (failWrites) throw new Error("write failed");
           events.push(`set ${id}`);
           docs.set(id, data);
         },
@@ -41,19 +44,26 @@ mock.module("@/lib/images", {
       events.push(`upload ${path}`);
       return { url: `https://bucket/${path}-${source}`, source };
     },
-    deleteImage: async (image) => {
-      events.push(`delete ${image.url}`);
-    },
   },
 });
 mock.module("@/lib/redis", {
-  namedExports: { acquireLock: async () => lockAcquired },
+  namedExports: {
+    acquireLock: async (key) => {
+      if (key.startsWith("refresh:")) return lockAcquired;
+      if (heldLocks.has(key)) return false;
+      heldLocks.add(key);
+      return true;
+    },
+    releaseLock: async (key) => {
+      heldLocks.delete(key);
+    },
+  },
 });
 mock.module("next/server", {
   namedExports: { after: (callback) => scheduled.push(callback) },
 });
 
-const { getOrFetchMedia } = await import("@/lib/media");
+const { getOrFetchMedia, saveMediaItems } = await import("@/lib/media");
 const { AdultContentError } = await import("@/lib/http");
 
 function media(overrides = {}) {
@@ -96,7 +106,9 @@ test.beforeEach(() => {
   docs.clear();
   events.length = 0;
   scheduled.length = 0;
+  heldLocks.clear();
   lockAcquired = true;
+  failWrites = false;
 });
 
 test("a new title is fetched, its images uploaded and saved", async () => {
@@ -119,7 +131,7 @@ test("a fresh saved copy is returned without calling the provider", async () => 
   assert.equal(scheduled.length, 0);
 });
 
-test("an expired copy is returned right away and refreshed in the background", async () => {
+test("an expired copy is returned right away and refreshed in the background, keeping the replaced image", async () => {
   docs.set("ANIME_1", savedDoc(31));
   provider = async () => media({ title: "New title", coverImage: "cover-v2" });
 
@@ -131,11 +143,7 @@ test("an expired copy is returned right away and refreshed in the background", a
   await scheduled[0]();
 
   assert.equal(docs.get("ANIME_1").title, "New title");
-  assert.deepEqual(events, [
-    "upload media/ANIME_1/cover",
-    "set ANIME_1",
-    "delete https://bucket/media/ANIME_1/cover-cover-v1",
-  ]);
+  assert.deepEqual(events, ["upload media/ANIME_1/cover", "set ANIME_1"]);
 });
 
 test("the background refresh is skipped when another one holds the lock", async () => {
@@ -255,4 +263,48 @@ test("a provider failure with nothing saved is passed on", async () => {
   };
 
   await assert.rejects(getOrFetchMedia("ANIME", "1", false), /provider down/);
+});
+
+test("titles shown in a list are saved by their id and point at the saved images", async () => {
+  const items = await saveMediaItems([
+    media(),
+    media({ id: "ANIME_2", sourceId: "2", coverImage: "cover-2", bannerImage: "banner-2" }),
+  ]);
+
+  assert.deepEqual(
+    items.map(({ coverImage, bannerImage }) => [coverImage, bannerImage]),
+    [
+      ["https://bucket/media/ANIME_1/cover-cover-v1", null],
+      ["https://bucket/media/ANIME_2/cover-cover-2", "https://bucket/media/ANIME_2/banner-banner-2"],
+    ],
+  );
+  assert.equal(docs.get("ANIME_2").title, "Title");
+  assert.equal("createdAt" in items[0], false);
+});
+
+test("a title already saved with the same images isn't uploaded again", async () => {
+  docs.set("ANIME_1", savedDoc(5));
+
+  const [item] = await saveMediaItems([media({ title: "New title" })]);
+
+  assert.equal(item.coverImage, "https://bucket/media/ANIME_1/cover-cover-v1");
+  assert.equal(docs.get("ANIME_1").title, "New title");
+  assert.deepEqual(events, ["set ANIME_1"]);
+});
+
+test("the same new title saved by two lists at once is uploaded only once", async () => {
+  const [first, second] = await Promise.all([saveMediaItems([media()]), saveMediaItems([media()])]);
+
+  assert.equal(first[0].coverImage, second[0].coverImage);
+  assert.deepEqual(events, ["upload media/ANIME_1/cover", "set ANIME_1", "set ANIME_1"]);
+});
+
+test("a title that can't be saved is shown without images instead of the provider's", async () => {
+  failWrites = true;
+  mock.method(console, "warn", () => {});
+
+  const [item] = await saveMediaItems([media()]);
+
+  assert.equal(item.coverImage, null);
+  assert.equal(item.bannerImage, null);
 });

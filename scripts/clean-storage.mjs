@@ -57,8 +57,9 @@ async function listFiles() {
 async function listUsedKeys() {
   const prefix = `${publicUrl}/`;
   const keys = new Set();
-  const [snapshot, charts] = await Promise.all([
+  const [snapshot, lists, charts] = await Promise.all([
     db.collection("media").get(),
+    db.collection("lists").get(),
     db.collection("charts").get(),
   ]);
   const addKeys = (urls) => {
@@ -80,16 +81,14 @@ async function listUsedKeys() {
     ]);
   });
 
-  charts.forEach((doc) => {
-    const chart = doc.data();
+  lists.forEach((doc) => {
+    addKeys((doc.data().items ?? []).flatMap((item) => [item.coverImage, item.bannerImage]));
+  });
 
-    addKeys([
-      ...(chart.entries ?? []).flatMap((entry) => [entry.media.coverImage, entry.media.bannerImage]),
-      ...Object.values(chart.images ?? {}).flatMap((images) => [
-        images.coverImage?.url,
-        images.bannerImage?.url,
-      ]),
-    ]);
+  charts.forEach((doc) => {
+    addKeys(
+      (doc.data().entries ?? []).flatMap((entry) => [entry.media.coverImage, entry.media.bannerImage]),
+    );
   });
 
   return keys;

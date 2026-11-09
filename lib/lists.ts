@@ -1,5 +1,6 @@
 import { Timestamp } from "firebase-admin/firestore";
 import { getDb } from "@/lib/firebase";
+import { saveMediaItems } from "@/lib/media";
 import { listAnimeManga } from "@/lib/providers/anime-manga";
 import { listIgdb } from "@/lib/providers/igdb";
 import { hasCurrentSource, type ListName, type Media, type MediaList, type MediaType } from "@/lib/types";
@@ -73,6 +74,8 @@ export async function getOrFetchList(
   if (items.length === 0 && existing) {
     return { list: toMediaList(existing), stale: true };
   }
+
+  items = await saveMediaItems(items);
 
   const document: ListDocument = {
     type,

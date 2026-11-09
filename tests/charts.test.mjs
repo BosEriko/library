@@ -7,8 +7,8 @@ const CURRENT_WEEK_CACHE = "public, s-maxage=388800, stale-while-revalidate=3600
 const docs = new Map();
 const calls = [];
 const locks = [];
-const uploads = [];
-const failingImages = new Set();
+const saved = [];
+const unsaved = new Set();
 let limited = null;
 let lock = async () => true;
 let trending = async () => [];
@@ -62,15 +62,15 @@ mock.module("@/lib/providers/igdb", {
     },
   },
 });
-mock.module("@/lib/images", {
+mock.module("@/lib/media", {
   namedExports: {
-    storeImage: async (path, source, _width, previous) => {
-      if (previous && previous.source === source) return previous;
-      if (!source) return null;
-      if (failingImages.has(source)) return previous;
-      uploads.push(path);
-      return { url: `https://bucket/${path}.webp`, source };
-    },
+    saveMediaItems: async (items) =>
+      items.map((item) => {
+        saved.push(item.id);
+        const stored = (kind) =>
+          item[kind] && !unsaved.has(item.id) ? `https://bucket/media/${item.id}/${kind}.webp` : null;
+        return { ...item, coverImage: stored("coverImage"), bannerImage: stored("bannerImage") };
+      }),
   },
 });
 mock.module("@/lib/redis", {
@@ -113,7 +113,6 @@ function savedChart(week, entries, overrides = {}) {
     adult: false,
     previousWeek: null,
     entries,
-    images: {},
     updatedAt: Timestamp.fromMillis(NOW - 7 * 24 * 60 * 60 * 1000),
     ...overrides,
   };
@@ -134,8 +133,8 @@ test.beforeEach(() => {
   docs.clear();
   calls.length = 0;
   locks.length = 0;
-  uploads.length = 0;
-  failingImages.clear();
+  saved.length = 0;
+  unsaved.clear();
   limited = null;
   lock = async () => true;
   trending = async () => [media("1"), media("2")];
@@ -190,8 +189,8 @@ test("manga, games and adult charts are built and saved separately", async () =>
   assert.equal(docs.get("MANGA_2026-W46_adult").adult, true);
 });
 
-test("covers and banners are saved as storage copies, and an image that can't be copied is left empty", async () => {
-  failingImages.add("https://cdn.test/2.jpg");
+test("every title on a new chart is saved by its id, and the chart uses those saved images", async () => {
+  unsaved.add("ANIME_2");
   trending = async () => [
     media("1", "ANIME", { coverImage: "https://cdn.test/1.jpg", bannerImage: "https://cdn.test/1-wide.jpg" }),
     media("2", "ANIME", { coverImage: "https://cdn.test/2.jpg", bannerImage: null }),
@@ -201,35 +200,26 @@ test("covers and banners are saved as storage copies, and an image that can't be
   const chart = await response.json();
 
   assert.equal(response.status, 200);
+  assert.deepEqual(saved, ["ANIME_1", "ANIME_2"]);
   assert.deepEqual(
     chart.entries.map(({ media }) => [media.coverImage, media.bannerImage]),
     [
-      ["https://bucket/charts/ANIME_1/cover.webp", "https://bucket/charts/ANIME_1/banner.webp"],
+      ["https://bucket/media/ANIME_1/coverImage.webp", "https://bucket/media/ANIME_1/bannerImage.webp"],
       [null, null],
     ],
   );
   assert.deepEqual(docs.get("ANIME_2026-W46").entries, chart.entries);
+  assert.equal("images" in docs.get("ANIME_2026-W46"), false);
   assert.doesNotMatch(JSON.stringify(chart), /cdn\.test/);
 });
 
-test("images already copied for an earlier chart are reused when they haven't changed", async () => {
-  const stored = { url: "https://bucket/charts/ANIME_1/cover-old.webp", source: "https://cdn.test/1.jpg" };
-  docs.set(
-    "ANIME_2026-W44",
-    savedChart("2026-W44", [entry("1", 1, null, "new", 1, 1)], {
-      images: { ANIME_1: { coverImage: stored, bannerImage: null } },
-    }),
-  );
-  trending = async () => [
-    media("1", "ANIME", { coverImage: "https://cdn.test/1.jpg" }),
-    media("2", "ANIME", { coverImage: "https://cdn.test/2.jpg" }),
-  ];
+test("a saved chart is served as it is, without saving its titles again", async () => {
+  await get("/api/charts/anime");
+  saved.length = 0;
 
-  const chart = await (await get("/api/charts/anime")).json();
+  await get("/api/charts/anime?week=2026-W46");
 
-  assert.deepEqual(uploads, ["charts/ANIME_2/cover"]);
-  assert.equal(chart.entries[0].media.coverImage, stored.url);
-  assert.deepEqual(docs.get("ANIME_2026-W46").images.ANIME_1, { coverImage: stored, bannerImage: null });
+  assert.deepEqual(saved, []);
 });
 
 test("movement, weeks on chart and peak compare against the most recent earlier saved chart", async () => {

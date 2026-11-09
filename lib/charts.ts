@@ -1,7 +1,7 @@
 import { Timestamp } from "firebase-admin/firestore";
 import { getDb } from "@/lib/firebase";
-import { storeImage, type StoredImage } from "@/lib/images";
 import { fetchList } from "@/lib/lists";
+import { saveMediaItems } from "@/lib/media";
 import { acquireLock } from "@/lib/redis";
 import type { Chart, ChartEntry, ChartMovement, Media, MediaType } from "@/lib/types";
 
@@ -10,13 +10,6 @@ const DAY_MS = 24 * 60 * 60 * 1000;
 const WEEK_MS = 7 * DAY_MS;
 const WEEK_PATTERN = /^(\d{4})-W(\d{2})$/;
 const BUILD_LOCK_SECONDS = 60;
-const COVER_WIDTH = 480;
-const BANNER_WIDTH = 1600;
-
-interface ChartImages {
-  coverImage: StoredImage | null;
-  bannerImage: StoredImage | null;
-}
 
 interface ChartDocument {
   type: MediaType;
@@ -24,7 +17,6 @@ interface ChartDocument {
   adult: boolean;
   previousWeek: string | null;
   entries: ChartEntry[];
-  images: Record<string, ChartImages>;
   updatedAt: Timestamp;
 }
 
@@ -108,47 +100,17 @@ function movement(rank: number, previousRank: number | null): ChartMovement {
   return rank < previousRank ? "up" : "down";
 }
 
-async function storeImages(media: Media, previous: ChartImages | undefined): Promise<ChartImages> {
-  const [coverImage, bannerImage] = await Promise.all([
-    storeImage(
-      `charts/${media.id}/cover`,
-      media.coverImage,
-      COVER_WIDTH,
-      previous?.coverImage ?? null,
-    ),
-    storeImage(
-      `charts/${media.id}/banner`,
-      media.bannerImage,
-      BANNER_WIDTH,
-      previous?.bannerImage ?? null,
-    ),
-  ]);
-
-  return { coverImage, bannerImage };
-}
-
-async function rankEntries(
-  items: Media[],
-  earlier: ChartDocument[],
-): Promise<Pick<ChartDocument, "entries" | "images">> {
+function rankEntries(items: Media[], earlier: ChartDocument[]): ChartEntry[] {
   const previous = new Map(earlier.at(-1)?.entries.map((entry) => [entry.media.id, entry]));
   const peaks = new Map<string, number>();
-  const previousImages = new Map<string, ChartImages>();
 
   for (const chart of earlier) {
     for (const entry of chart.entries) {
       peaks.set(entry.media.id, Math.min(entry.rank, peaks.get(entry.media.id) ?? entry.rank));
     }
-
-    for (const [id, images] of Object.entries(chart.images ?? {})) {
-      previousImages.set(id, images);
-    }
   }
 
-  const images = await Promise.all(
-    items.map((media) => storeImages(media, previousImages.get(media.id))),
-  );
-  const entries = items.map((media, index) => {
+  return items.map((media, index) => {
     const rank = index + 1;
     const last = previous.get(media.id);
     const previousRank = last?.rank ?? null;
@@ -159,18 +121,9 @@ async function rankEntries(
       movement: movement(rank, previousRank),
       weeksOnChart: (last?.weeksOnChart ?? 0) + 1,
       peak: Math.min(rank, peaks.get(media.id) ?? rank),
-      media: {
-        ...media,
-        coverImage: images[index].coverImage?.url ?? null,
-        bannerImage: images[index].bannerImage?.url ?? null,
-      },
+      media,
     };
   });
-
-  return {
-    entries,
-    images: Object.fromEntries(items.map((media, index) => [media.id, images[index]])),
-  };
 }
 
 async function buildChart(
@@ -197,7 +150,7 @@ async function buildChart(
     week,
     adult: allowAdult,
     previousWeek: earlier.at(-1)?.week ?? null,
-    ...(await rankEntries(items, earlier)),
+    entries: rankEntries(await saveMediaItems(items), earlier),
     updatedAt: Timestamp.now(),
   };
 }
