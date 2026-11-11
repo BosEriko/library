@@ -7,6 +7,7 @@ const SECTIONS = [
   { id: "images", label: "Images" },
   { id: "steam", label: "Steam" },
   { id: "lists", label: "Lists" },
+  { id: "seasons", label: "Seasons" },
   { id: "charts", label: "Charts" },
   { id: "schema", label: "Media schema" },
   { id: "caching", label: "Caching" },
@@ -52,6 +53,27 @@ const LISTS = [
   { list: "season", anime: "This season's anime, most popular first.", manga: "Series that started in the last 6 months and are still running, most popular first.", game: "Released in the last 90 days, most anticipated first." },
   { list: "top", anime: "Highest rated of all time.", manga: "Highest rated of all time.", game: "Highest rated of all time, from games with at least 300 ratings." },
   { list: "upcoming", anime: "Not yet released, most popular first.", manga: "Not yet released, most popular first.", game: "Not yet released, most anticipated first." },
+];
+
+const SEASON_PARAMS = [
+  { name: "type", type: "string", required: true, description: "One of anime, manga or game." },
+  { name: "season", type: "string", required: true, description: "A year and season such as 2027-winter. Seasons follow the calendar in UTC: winter is January to March, spring April to June, summer July to September and fall October to December. Only the previous, current and next season are available; any other returns 404." },
+];
+
+const SEASONS = [
+  { type: "anime", contents: "Anime of that season, most popular first." },
+  { type: "manga", contents: "Manga that start publishing during the season, most popular first. Titles with only a start year are left out." },
+  { type: "game", contents: "Games released during the season, most anticipated first. Games with only a release year, or no date yet, are left out." },
+];
+
+const SEASON_FIELDS = [
+  { name: "type", type: '"ANIME" | "MANGA" | "GAME"', description: "Media type of the season." },
+  { name: "season", type: '"winter" | "spring" | "summer" | "fall"', description: "The season." },
+  { name: "year", type: "number", description: "The year of the season." },
+  { name: "startsAt", type: "string", description: "ISO date the season starts, the first of its first month at 00:00 UTC." },
+  { name: "endsAt", type: "string", description: "ISO date the season ends, the first day of the next season at 00:00 UTC." },
+  { name: "items", type: "object[]", description: "Up to 20 titles, in the same shape as list items." },
+  { name: "updatedAt", type: "string", description: "ISO date the current copy was made." },
 ];
 
 const CHART_PARAMS = [
@@ -106,9 +128,9 @@ const SCHEMA_FIELDS = [
 ];
 
 const DETAILS = [
-  { type: "ANIME", fields: "format, episodes, duration, season, studios, airedFrom, airedTo" },
-  { type: "MANGA", fields: "format, chapters, volumes, authors, publishedFrom, publishedTo" },
-  { type: "GAME", fields: "platforms, developers, publishers, releaseDate, steamUrl (the Steam store page, or null when the game isn't on Steam)" },
+  { type: "ANIME", fields: "format, episodes, duration, season, studios, airedFrom, airedFromPrecision, airedTo" },
+  { type: "MANGA", fields: "format, chapters, volumes, authors, publishedFrom, publishedFromPrecision, publishedTo" },
+  { type: "GAME", fields: "platforms, developers, publishers, releaseDate, releaseDatePrecision, steamUrl (the Steam store page, or null when the game isn't on Steam)" },
 ];
 
 const ERRORS = [
@@ -182,6 +204,25 @@ const LIST_RESPONSE = `{
     …
   ],
   "updatedAt": "2026-10-31T08:00:00.000Z"
+}`;
+
+const SEASON_RESPONSE = `{
+  "type": "ANIME",
+  "season": "winter",
+  "year": 2027,
+  "startsAt": "2027-01-01T00:00:00.000Z",
+  "endsAt": "2027-04-01T00:00:00.000Z",
+  "items": [
+    {
+      "id": "ANIME_61338",
+      "type": "ANIME",
+      "sourceId": "61338",
+      "title": "Shangri-La Frontier 3rd Season",
+      …
+    },
+    …
+  ],
+  "updatedAt": "2026-11-11T08:00:00.000Z"
 }`;
 
 const CHART_RESPONSE = `{
@@ -430,6 +471,74 @@ export default function Home() {
           </p>
         </section>
 
+        <section id="seasons" className={styles.section}>
+          <h2>Seasons</h2>
+          <Endpoint path="/api/seasons/{type}/{season}" />
+          <p>
+            Returns up to 20 titles that start in a season, for this season&apos;s lineup or a look
+            at what&apos;s coming next. Items follow the media schema, so any of them can be opened
+            with the profile endpoint. Every title is saved as a profile, and its covers and banners
+            point at the library&apos;s own copies.
+          </p>
+
+          <h3>Path parameters</h3>
+          <Params rows={SEASON_PARAMS} />
+
+          <h3>Query parameters</h3>
+          <Params rows={LIST_QUERY_PARAMS} />
+
+          <h3>What each season contains</h3>
+          <table className={styles.table}>
+            <thead>
+              <tr>
+                <th scope="col">Type</th>
+                <th scope="col">Titles</th>
+              </tr>
+            </thead>
+            <tbody>
+              {SEASONS.map((row) => (
+                <tr key={row.type}>
+                  <td>
+                    <code className={styles.name}>{row.type}</code>
+                  </td>
+                  <td>{row.contents}</td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+
+          <h3>Fields</h3>
+          <table className={styles.table}>
+            <thead>
+              <tr>
+                <th scope="col">Field</th>
+                <th scope="col">Type</th>
+                <th scope="col">Description</th>
+              </tr>
+            </thead>
+            <tbody>
+              {SEASON_FIELDS.map((field) => (
+                <tr key={field.name}>
+                  <td>
+                    <code className={styles.name}>{field.name}</code>
+                  </td>
+                  <td className={styles.type}>{field.type}</td>
+                  <td>{field.description}</td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+
+          <h3>Example</h3>
+          <Example label="Request">{"curl /api/seasons/anime/2027-winter"}</Example>
+          <Example label="Response">{SEASON_RESPONSE}</Example>
+
+          <p className={styles.note}>
+            Seasons are rebuilt from the provider once a day, like lists. <code>updatedAt</code>{" "}
+            says when the current copy was made.
+          </p>
+        </section>
+
         <section id="charts" className={styles.section}>
           <h2>Charts</h2>
           <Endpoint path="/api/charts/{type}?week={week}" />
@@ -526,6 +635,13 @@ export default function Home() {
           </table>
 
           <h3>Details by type</h3>
+          <p>
+            Each start or release date comes with a precision: <code>day</code>,{" "}
+            <code>month</code>, <code>quarter</code> (games only) or <code>year</code>, or{" "}
+            <code>null</code> when there&apos;s no date or it hasn&apos;t been decided. A date known
+            only to the month or year is saved as its first day, or as the provider&apos;s
+            placeholder for games, so check the precision before showing the day.
+          </p>
           <table className={styles.table}>
             <thead>
               <tr>
@@ -561,9 +677,9 @@ export default function Home() {
               fetched from the provider in the background for the next request.
             </li>
             <li>
-              <strong>Lists, 1 day.</strong> Each list is saved to Firestore and rebuilt from the
-              provider once the saved copy is a day old. If the provider is unavailable, the older
-              copy is returned.
+              <strong>Lists and seasons, 1 day.</strong> Each list and season is saved to
+              Firestore and rebuilt from the provider once the saved copy is a day old. If the
+              provider is unavailable, the older copy is returned.
             </li>
             <li>
               <strong>Charts, until the week ends.</strong> Each week&apos;s chart is saved to

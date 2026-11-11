@@ -20,6 +20,19 @@ export function toListName(value: string): ListName | null {
   return LIST_NAMES.find((name) => name === value) ?? null;
 }
 
+export const SEASON_NAMES = ["winter", "spring", "summer", "fall"] as const;
+
+export type SeasonName = (typeof SEASON_NAMES)[number];
+
+export type DatePrecision = "day" | "month" | "quarter" | "year";
+
+export interface SeasonPeriod {
+  season: SeasonName;
+  year: number;
+  startsAt: Date;
+  endsAt: Date;
+}
+
 export interface Media {
   id: string;
   type: MediaType;
@@ -46,6 +59,16 @@ export interface StoredMedia extends Media {
 export interface MediaList {
   type: MediaType;
   list: ListName;
+  items: Media[];
+  updatedAt: string;
+}
+
+export interface Season {
+  type: MediaType;
+  season: SeasonName;
+  year: number;
+  startsAt: string;
+  endsAt: string;
   items: Media[];
   updatedAt: string;
 }

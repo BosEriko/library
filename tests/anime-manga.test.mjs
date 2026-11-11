@@ -4,7 +4,9 @@ import { NotFoundError } from "@/lib/http";
 
 process.env.ANIME_MANGA_API_URL = "https://anime-manga.test/graphql";
 
-const { getAnimeManga, listAnimeManga, searchAnimeManga } = await import("@/lib/providers/anime-manga");
+const { getAnimeManga, listAnimeManga, searchAnimeManga, seasonAnimeManga } = await import(
+  "@/lib/providers/anime-manga"
+);
 
 const anime = {
   id: 154587,
@@ -62,8 +64,66 @@ test("search normalizes anime and manga into the shared schema", async () => {
     season: "fall",
     studios: ["MADHOUSE"],
     airedFrom: "2023-09-29T00:00:00.000Z",
+    airedFromPrecision: "day",
     airedTo: "2024-03-22T00:00:00.000Z",
   });
+});
+
+test("start dates say how precise they are", async () => {
+  mockApi({
+    Page: {
+      media: [
+        { ...anime, startDate: { year: 2027, month: 1, day: null } },
+        { ...anime, idMal: 2, startDate: { year: 2027, month: null, day: null } },
+        { ...anime, idMal: 3, startDate: { year: null, month: null, day: null } },
+      ],
+    },
+  });
+
+  const items = await listAnimeManga("ANIME", "upcoming", 20, false);
+
+  assert.deepEqual(
+    items.map((media) => [media.details.airedFrom, media.details.airedFromPrecision]),
+    [
+      ["2027-01-01T00:00:00.000Z", "month"],
+      ["2027-01-01T00:00:00.000Z", "year"],
+      [null, null],
+    ],
+  );
+});
+
+const winter = {
+  season: "winter",
+  year: 2027,
+  startsAt: new Date("2027-01-01T00:00:00.000Z"),
+  endsAt: new Date("2027-04-01T00:00:00.000Z"),
+};
+
+test("an anime season is looked up by season and year", async () => {
+  const fetch = mockApi({ Page: { media: [anime] } });
+
+  const items = await seasonAnimeManga("ANIME", winter, 20, false);
+
+  const { variables } = JSON.parse(fetch.mock.calls[0].arguments[1].body);
+  assert.equal(variables.season, "WINTER");
+  assert.equal(variables.seasonYear, 2027);
+  assert.deepEqual(variables.sort, ["POPULARITY_DESC"]);
+  assert.equal(variables.startDate, undefined);
+  assert.deepEqual(items.map((media) => media.sourceId), ["52991"]);
+});
+
+test("a manga season covers titles that start within its months", async () => {
+  const fetch = mockApi({ Page: { media: [] } });
+
+  await seasonAnimeManga("MANGA", winter, 20, false);
+
+  const { query, variables } = JSON.parse(fetch.mock.calls[0].arguments[1].body);
+  assert.match(query, /startDate_greater: \$startDate/);
+  assert.match(query, /startDate_lesser: \$endDate/);
+  assert.equal(variables.startDate, 20261231);
+  assert.equal(variables.endDate, 20270400);
+  assert.equal(variables.season, undefined);
+  assert.deepEqual(variables.sort, ["POPULARITY_DESC"]);
 });
 
 test("titles without a MyAnimeList id are left out of search and lists", async () => {
@@ -145,6 +205,7 @@ test("manga authors are listed once even with both story and art roles", async (
   assert.equal(media.source.url, "https://myanimelist.net/manga/52991");
   assert.deepEqual(media.details.authors, ["Kanehito Yamada", "Tsukasa Abe"]);
   assert.equal(media.details.chapters, 140);
+  assert.equal(media.details.publishedFromPrecision, "day");
 });
 
 test("a missing title is reported as not found", async () => {

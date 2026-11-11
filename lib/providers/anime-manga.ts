@@ -1,5 +1,12 @@
 import { fetchJson, NotFoundError } from "@/lib/http";
-import { malSource, mediaId, type ListName, type Media } from "@/lib/types";
+import {
+  malSource,
+  mediaId,
+  type DatePrecision,
+  type ListName,
+  type Media,
+  type SeasonPeriod,
+} from "@/lib/types";
 
 const PAGE_SIZE = 50;
 
@@ -53,6 +60,7 @@ function listQuery(allowAdult: boolean): string {
       $seasonYear: Int
       $status: MediaStatus
       $startDate: FuzzyDateInt
+      $endDate: FuzzyDateInt
     ) {
       Page(perPage: $perPage) {
         media(
@@ -61,7 +69,8 @@ function listQuery(allowAdult: boolean): string {
           season: $season
           seasonYear: $seasonYear
           status: $status
-          startDate_greater: $startDate${adultFilter}
+          startDate_greater: $startDate
+          startDate_lesser: $endDate${adultFilter}
         ) { ${MEDIA_FIELDS} }
       }
     }
@@ -70,9 +79,14 @@ function listQuery(allowAdult: boolean): string {
 
 const SEASONS = ["WINTER", "SPRING", "SUMMER", "FALL"] as const;
 const NEW_SERIES_DAYS = 180;
+const DAY_MS = 24 * 60 * 60 * 1000;
 
 function fuzzyDate(date: Date): number {
   return date.getUTCFullYear() * 10000 + (date.getUTCMonth() + 1) * 100 + date.getUTCDate();
+}
+
+function fuzzyMonth(date: Date): number {
+  return date.getUTCFullYear() * 10000 + (date.getUTCMonth() + 1) * 100;
 }
 
 function listVariables(list: ListName, type: AnimeMangaType, now: Date): Record<string, unknown> {
@@ -166,6 +180,14 @@ function toIsoDate(date: ProviderDate): string | null {
   return new Date(Date.UTC(date.year, (date.month ?? 1) - 1, date.day ?? 1)).toISOString();
 }
 
+function datePrecision(date: ProviderDate): DatePrecision | null {
+  if (!date.year) {
+    return null;
+  }
+
+  return date.day ? "day" : date.month ? "month" : "year";
+}
+
 function normalize(media: ProviderMedia, malId: number, type: AnimeMangaType): Media {
   const title = media.title.romaji ?? media.title.english ?? media.title.native ?? "";
   const altTitles = [media.title.english, media.title.native, ...media.synonyms].filter(
@@ -199,6 +221,7 @@ function normalize(media: ProviderMedia, malId: number, type: AnimeMangaType): M
         season: media.season?.toLowerCase() ?? null,
         studios: (media.studios?.nodes ?? []).map((studio) => studio.name),
         airedFrom: toIsoDate(media.startDate),
+        airedFromPrecision: datePrecision(media.startDate),
         airedTo: toIsoDate(media.endDate),
       },
     };
@@ -218,6 +241,7 @@ function normalize(media: ProviderMedia, malId: number, type: AnimeMangaType): M
         ),
       ],
       publishedFrom: toIsoDate(media.startDate),
+      publishedFromPrecision: datePrecision(media.startDate),
       publishedTo: toIsoDate(media.endDate),
     },
   };
@@ -256,6 +280,29 @@ export async function listAnimeManga(
     perPage: PAGE_SIZE,
     ...listVariables(list, type, new Date()),
     ...(status ? { status } : {}),
+  });
+
+  return withMalIds(data.Page.media, type, limit);
+}
+
+export async function seasonAnimeManga(
+  type: AnimeMangaType,
+  period: SeasonPeriod,
+  limit: number,
+  allowAdult: boolean,
+): Promise<Media[]> {
+  const variables =
+    type === "ANIME"
+      ? { season: period.season.toUpperCase(), seasonYear: period.year }
+      : {
+          startDate: fuzzyDate(new Date(period.startsAt.getTime() - DAY_MS)),
+          endDate: fuzzyMonth(period.endsAt),
+        };
+  const data = await queryApi<{ Page: { media: ProviderMedia[] } }>(listQuery(allowAdult), {
+    type,
+    perPage: PAGE_SIZE,
+    sort: ["POPULARITY_DESC"],
+    ...variables,
   });
 
   return withMalIds(data.Page.media, type, limit);

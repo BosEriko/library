@@ -1,5 +1,12 @@
 import { fetchJson, NotFoundError } from "@/lib/http";
-import { mediaId, type ListName, type Media, type SteamMatch } from "@/lib/types";
+import {
+  mediaId,
+  type DatePrecision,
+  type ListName,
+  type Media,
+  type SeasonPeriod,
+  type SteamMatch,
+} from "@/lib/types";
 
 const TOKEN_URL = "https://id.twitch.tv/oauth2/token";
 const IMAGE_URL = "https://images.igdb.com/igdb/image/upload";
@@ -10,6 +17,18 @@ const VISITS_POPULARITY = 1;
 const DAY_SECONDS = 24 * 60 * 60;
 const NEW_RELEASE_DAYS = 90;
 const TOP_MIN_RATINGS = 300;
+const SEASON_QUERY_SIZE = 50;
+const DATE_PRECISIONS: (DatePrecision | null)[] = [
+  "day",
+  "month",
+  "year",
+  "quarter",
+  "quarter",
+  "quarter",
+  "quarter",
+  null,
+];
+const SEASON_PRECISIONS = new Set<DatePrecision | null>(["day", "month", "quarter"]);
 
 const FIELDS = [
   "name",
@@ -30,6 +49,8 @@ const FIELDS = [
   "involved_companies.publisher",
   "external_games.uid",
   "external_games.external_game_source",
+  "release_dates.date",
+  "release_dates.date_format",
 ].join(",");
 
 interface IgdbImage {
@@ -53,6 +74,7 @@ interface IgdbGame {
   platforms?: { name: string }[];
   involved_companies?: { company: { name: string }; developer: boolean; publisher: boolean }[];
   external_games?: { uid?: string; external_game_source?: number }[];
+  release_dates?: { date?: number; date_format?: number }[];
 }
 
 let token: { value: string; expiresAt: number } | null = null;
@@ -129,6 +151,18 @@ function imageUrl(image: IgdbImage | undefined, size: string): string | null {
   return image ? `${IMAGE_URL}/${size}/${image.image_id}.jpg` : null;
 }
 
+function releasePrecision(game: IgdbGame): DatePrecision | null {
+  const format = game.release_dates?.find(
+    (date) => date.date === game.first_release_date,
+  )?.date_format;
+
+  return format === undefined ? null : (DATE_PRECISIONS[format] ?? null);
+}
+
+function baseFilters(allowAdult: boolean): string[] {
+  return [`game_type = ${MAIN_GAME_TYPE}`, ...(allowAdult ? [] : [`themes != (${EROTIC_THEME_ID})`])];
+}
+
 function normalize(game: IgdbGame): Media {
   const companies = game.involved_companies ?? [];
   const steamAppId = game.external_games?.find(
@@ -159,6 +193,7 @@ function normalize(game: IgdbGame): Media {
       releaseDate: game.first_release_date
         ? new Date(game.first_release_date * 1000).toISOString()
         : null,
+      releaseDatePrecision: game.first_release_date ? releasePrecision(game) : null,
       steamUrl: steamAppId ? `https://store.steampowered.com/app/${steamAppId}` : null,
     },
   };
@@ -203,10 +238,7 @@ export async function listIgdb(
   allowAdult: boolean,
 ): Promise<Media[]> {
   const now = Math.floor(Date.now() / 1000);
-  const filters = [
-    `game_type = ${MAIN_GAME_TYPE}`,
-    ...(allowAdult ? [] : [`themes != (${EROTIC_THEME_ID})`]),
-  ];
+  const filters = baseFilters(allowAdult);
 
   if (list === "trending") {
     return (await trendingGames(limit, filters)).map(normalize);
@@ -225,6 +257,26 @@ export async function listIgdb(
   );
 
   return games.map(normalize);
+}
+
+export async function seasonIgdb(
+  period: SeasonPeriod,
+  limit: number,
+  allowAdult: boolean,
+): Promise<Media[]> {
+  const where = [
+    `first_release_date >= ${Math.floor(period.startsAt.getTime() / 1000)}`,
+    `first_release_date < ${Math.floor(period.endsAt.getTime() / 1000)}`,
+    ...baseFilters(allowAdult),
+  ];
+  const games = await queryGames(
+    `fields ${FIELDS}; where ${where.join(" & ")}; sort hypes desc; limit ${SEASON_QUERY_SIZE};`,
+  );
+
+  return games
+    .filter((game) => SEASON_PRECISIONS.has(releasePrecision(game)))
+    .slice(0, limit)
+    .map(normalize);
 }
 
 export async function getIgdb(id: string): Promise<Media> {

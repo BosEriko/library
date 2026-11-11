@@ -57,9 +57,10 @@ async function listFiles() {
 async function listUsedKeys() {
   const prefix = `${publicUrl}/`;
   const keys = new Set();
-  const [snapshot, lists, charts] = await Promise.all([
+  const [snapshot, lists, seasons, charts] = await Promise.all([
     db.collection("media").get(),
     db.collection("lists").get(),
+    db.collection("seasons").get(),
     db.collection("charts").get(),
   ]);
   const addKeys = (urls) => {
@@ -81,8 +82,10 @@ async function listUsedKeys() {
     ]);
   });
 
-  lists.forEach((doc) => {
-    addKeys((doc.data().items ?? []).flatMap((item) => [item.coverImage, item.bannerImage]));
+  [lists, seasons].forEach((collection) => {
+    collection.forEach((doc) => {
+      addKeys((doc.data().items ?? []).flatMap((item) => [item.coverImage, item.bannerImage]));
+    });
   });
 
   charts.forEach((doc) => {

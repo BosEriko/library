@@ -1,4 +1,4 @@
-import { Timestamp } from "firebase-admin/firestore";
+import { Timestamp, type DocumentReference } from "firebase-admin/firestore";
 import { getDb } from "@/lib/firebase";
 import { saveMediaItems } from "@/lib/media";
 import { listAnimeManga } from "@/lib/providers/anime-manga";
@@ -10,12 +10,15 @@ const LIST_SIZE = 20;
 
 export const LIST_MAX_AGE_MS = 24 * 60 * 60 * 1000;
 
-interface ListDocument {
+interface SavedItems {
+  items: Media[];
+  updatedAt: Timestamp;
+}
+
+interface ListDocument extends SavedItems {
   type: MediaType;
   list: ListName;
   adult: boolean;
-  items: Media[];
-  updatedAt: Timestamp;
 }
 
 export interface ListResult {
@@ -43,6 +46,44 @@ function toMediaList(doc: ListDocument): MediaList {
   };
 }
 
+export async function getOrFetchItems<D extends SavedItems>(
+  ref: DocumentReference,
+  fetchItems: () => Promise<Media[]>,
+  fields: Omit<D, keyof SavedItems>,
+): Promise<{ doc: D; stale: boolean }> {
+  const snapshot = await ref.get();
+  const saved = snapshot.exists ? (snapshot.data() as D) : null;
+  const existing = saved && saved.items.every(hasCurrentSource) ? saved : null;
+
+  if (existing && Date.now() - existing.updatedAt.toMillis() < LIST_MAX_AGE_MS) {
+    return { doc: existing, stale: false };
+  }
+
+  let items: Media[];
+
+  try {
+    items = await fetchItems();
+  } catch (error) {
+    if (existing) {
+      return { doc: existing, stale: true };
+    }
+
+    throw error;
+  }
+
+  if (items.length === 0 && existing) {
+    return { doc: existing, stale: true };
+  }
+
+  items = await saveMediaItems(items);
+
+  const doc = { ...fields, items, updatedAt: Timestamp.now() } as D;
+
+  await ref.set(doc);
+
+  return { doc, stale: false };
+}
+
 export async function getOrFetchList(
   type: MediaType,
   list: ListName,
@@ -51,41 +92,11 @@ export async function getOrFetchList(
   const ref = getDb()
     .collection(COLLECTION)
     .doc(`${type}_${list}${allowAdult ? "_adult" : ""}`);
-  const snapshot = await ref.get();
-  const saved = snapshot.exists ? (snapshot.data() as ListDocument) : null;
-  const existing = saved && saved.items.every(hasCurrentSource) ? saved : null;
+  const { doc, stale } = await getOrFetchItems<ListDocument>(
+    ref,
+    () => fetchList(type, list, allowAdult),
+    { type, list, adult: allowAdult },
+  );
 
-  if (existing && Date.now() - existing.updatedAt.toMillis() < LIST_MAX_AGE_MS) {
-    return { list: toMediaList(existing), stale: false };
-  }
-
-  let items: Media[];
-
-  try {
-    items = await fetchList(type, list, allowAdult);
-  } catch (error) {
-    if (existing) {
-      return { list: toMediaList(existing), stale: true };
-    }
-
-    throw error;
-  }
-
-  if (items.length === 0 && existing) {
-    return { list: toMediaList(existing), stale: true };
-  }
-
-  items = await saveMediaItems(items);
-
-  const document: ListDocument = {
-    type,
-    list,
-    adult: allowAdult,
-    items,
-    updatedAt: Timestamp.now(),
-  };
-
-  await ref.set(document);
-
-  return { list: toMediaList(document), stale: false };
+  return { list: toMediaList(doc), stale };
 }

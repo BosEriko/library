@@ -5,7 +5,7 @@ process.env.IGDB_CLIENT_ID = "test-client";
 process.env.IGDB_CLIENT_SECRET = "test-secret";
 process.env.IGDB_API_URL = "https://igdb.test/v4";
 
-const { searchIgdb } = await import("@/lib/providers/igdb");
+const { searchIgdb, seasonIgdb } = await import("@/lib/providers/igdb");
 
 const game = {
   id: 1022,
@@ -95,4 +95,56 @@ test("quotes in the search text are escaped", async () => {
   await searchIgdb('say "hi"', 5, true);
 
   assert.match(gameQueries(fetch)[0], /^search "say \\"hi\\"";/);
+});
+
+const releasedOn = (date, format) => ({
+  ...game,
+  first_release_date: date,
+  release_dates: [
+    { date: 1, date_format: 0 },
+    { date, date_format: format },
+  ],
+});
+
+test("release dates say how precise they are", async () => {
+  mockIgdb([
+    releasedOn(1795046400, 0),
+    releasedOn(1795046400, 1),
+    releasedOn(1806451200, 2),
+    releasedOn(1806451200, 6),
+    releasedOn(1806451200, 7),
+    { ...game, first_release_date: 1795046400 },
+    { ...game, first_release_date: undefined },
+  ]);
+
+  const items = await searchIgdb("zelda", 10, false);
+
+  assert.deepEqual(
+    items.map((media) => media.details.releaseDatePrecision),
+    ["day", "month", "year", "quarter", null, null, null],
+  );
+});
+
+test("a game season asks for releases within its dates and leaves out undated games", async () => {
+  const fetch = mockIgdb([
+    { ...releasedOn(1795046400, 0), id: 1 },
+    { ...releasedOn(1806451200, 2), id: 2 },
+    { ...releasedOn(1798675200, 1), id: 3 },
+    { ...releasedOn(1798675200, 7), id: 4 },
+    { ...releasedOn(1806451200, 3), id: 5 },
+  ]);
+  const winter = {
+    season: "winter",
+    year: 2027,
+    startsAt: new Date("2027-01-01T00:00:00.000Z"),
+    endsAt: new Date("2027-04-01T00:00:00.000Z"),
+  };
+
+  const items = await seasonIgdb(winter, 2, false);
+
+  const [query] = gameQueries(fetch);
+  assert.match(query, /where first_release_date >= 1798761600 & first_release_date < 1806537600 & game_type = 0 & themes != \(42\);/);
+  assert.match(query, /sort hypes desc; limit 50;$/);
+  assert.match(query, /release_dates\.date,release_dates\.date_format/);
+  assert.deepEqual(items.map((media) => media.sourceId), ["1", "3"]);
 });
