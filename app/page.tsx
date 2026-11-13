@@ -666,8 +666,10 @@ export default function Home() {
           <h2>Caching</h2>
           <ul className={styles.list}>
             <li>
-              <strong>Steam, 7 days.</strong> Results are cached in Redis. Steam app ids are cached
-              one by one, including ids with no match. Search results are not cached on the server.
+              <strong>Search and Steam, 7 days.</strong> Results are cached in Redis. Search ignores
+              letter case, so <code>q=Naruto</code> and <code>q=naruto</code> share a result. Each
+              type is cached on its own, so a type whose provider failed is not cached while the
+              others are. Steam app ids are cached one by one, including ids with no match.
             </li>
             <li>
               <strong>Profiles, 30 days.</strong> Profiles are saved to Firestore. Once the saved
@@ -696,7 +698,7 @@ export default function Home() {
             </li>
           </ul>
           <p>
-            Requests that arrive at once for the same title, list or season share one
+            Requests that arrive at once for the same title, list, season or search share one
             provider call, and the IGDB access token is kept in Redis until it expires.
           </p>
           <p>
