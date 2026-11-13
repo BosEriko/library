@@ -5,11 +5,12 @@ import {
 } from "firebase-admin/firestore";
 import { after } from "next/server";
 import { getDb } from "@/lib/firebase";
-import { AdultContentError, errorMessage } from "@/lib/http";
+import { AdultContentError, errorMessage, NotFoundError } from "@/lib/http";
 import { storeImage, type StoredImage } from "@/lib/images";
+import { inFlight } from "@/lib/in-flight";
 import { getAnimeManga } from "@/lib/providers/anime-manga";
 import { getIgdb } from "@/lib/providers/igdb";
-import { acquireLock, releaseLock } from "@/lib/redis";
+import { acquireLock, getCached, releaseLock, setCached } from "@/lib/redis";
 import {
   hasCurrentSource,
   mediaId,
@@ -26,6 +27,9 @@ const REFRESH_LOCK_SECONDS = 60;
 const SAVE_LOCK_SECONDS = 30;
 const SAVE_RETRY_MS = 250;
 const SAVE_ATTEMPTS = 40;
+const REFUSED_TTL_SECONDS = 24 * 60 * 60;
+
+type Refusal = "missing" | "adult";
 
 interface StoredImages {
   coverImage: StoredImage | null;
@@ -166,10 +170,24 @@ export async function getOrFetchMedia(
     return toStoredMedia(existing);
   }
 
+  const refusedKey = `refused:${mediaId(type, id)}`;
+
+  if (!existing) {
+    const [refused] = await getCached<Refusal>([refusedKey]);
+
+    if (refused === "missing") {
+      throw new NotFoundError(`${mediaId(type, id)} not found`);
+    }
+
+    if (refused === "adult" && !allowAdult) {
+      throw new AdultContentError(`${mediaId(type, id)} is adult content`);
+    }
+  }
+
   let media: Media;
 
   try {
-    media = await fetchFromProvider(type, id);
+    media = await inFlight(`media:${mediaId(type, id)}`, () => fetchFromProvider(type, id));
   } catch (error) {
     if (existing) {
       assertAllowed(existing, allowAdult);
@@ -177,7 +195,15 @@ export async function getOrFetchMedia(
       return toStoredMedia(existing);
     }
 
+    if (error instanceof NotFoundError) {
+      await setCached([[refusedKey, "missing"]], REFUSED_TTL_SECONDS);
+    }
+
     throw error;
+  }
+
+  if (media.isAdult && !allowAdult) {
+    await setCached([[refusedKey, "adult"]], REFUSED_TTL_SECONDS);
   }
 
   assertAllowed(media, allowAdult);

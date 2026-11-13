@@ -1,4 +1,6 @@
 import { fetchJson, NotFoundError } from "@/lib/http";
+import { inFlight } from "@/lib/in-flight";
+import { getCached, setCached } from "@/lib/redis";
 import {
   mediaId,
   type DatePrecision,
@@ -77,13 +79,30 @@ interface IgdbGame {
   release_dates?: { date?: number; date_format?: number }[];
 }
 
-let token: { value: string; expiresAt: number } | null = null;
+interface Token {
+  value: string;
+  expiresAt: number;
+}
+
+const TOKEN_KEY = "igdb:token";
+
+let token: Token | null = null;
 
 async function getToken(): Promise<string> {
   if (token && token.expiresAt > Date.now()) {
     return token.value;
   }
 
+  return inFlight(TOKEN_KEY, async () => {
+    const [saved] = await getCached<Token>([TOKEN_KEY]);
+
+    token = saved && saved.expiresAt > Date.now() ? saved : await requestToken();
+
+    return token.value;
+  });
+}
+
+async function requestToken(): Promise<Token> {
   const clientId = process.env.IGDB_CLIENT_ID;
   const clientSecret = process.env.IGDB_CLIENT_SECRET;
 
@@ -101,12 +120,12 @@ async function getToken(): Promise<string> {
     { method: "POST" },
   );
 
-  token = {
-    value: response.access_token,
-    expiresAt: Date.now() + (response.expires_in - 60) * 1000,
-  };
+  const ttlSeconds = response.expires_in - 60;
+  const requested = { value: response.access_token, expiresAt: Date.now() + ttlSeconds * 1000 };
 
-  return token.value;
+  await setCached([[TOKEN_KEY, requested]], ttlSeconds);
+
+  return requested;
 }
 
 function apiUrl(): string {

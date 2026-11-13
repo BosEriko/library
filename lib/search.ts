@@ -1,16 +1,14 @@
-import { REDIS_TTL_SECONDS } from "@/lib/cache";
 import { errorMessage } from "@/lib/http";
 import { searchAnimeManga } from "@/lib/providers/anime-manga";
 import { searchIgdb } from "@/lib/providers/igdb";
-import { getCached, setCached } from "@/lib/redis";
-import { hasCurrentSource, type Media, type MediaSegment } from "@/lib/types";
+import type { Media, MediaSegment } from "@/lib/types";
 
 export interface SearchResults {
   results: Record<MediaSegment, Media[]>;
   errors: Partial<Record<MediaSegment, string>>;
 }
 
-async function fetchAll(
+export async function searchAll(
   query: string,
   limit: number,
   allowAdult: boolean,
@@ -40,25 +38,4 @@ async function fetchAll(
   });
 
   return { results, errors };
-}
-
-export async function searchAll(
-  query: string,
-  limit: number,
-  allowAdult: boolean,
-): Promise<SearchResults> {
-  const key = `search:${allowAdult ? "adult" : "safe"}:${limit}:${query.toLowerCase()}`;
-  const [hit] = await getCached<SearchResults>([key]);
-
-  if (hit && [...hit.results.anime, ...hit.results.manga].every(hasCurrentSource)) {
-    return hit;
-  }
-
-  const search = await fetchAll(query, limit, allowAdult);
-
-  if (Object.keys(search.errors).length === 0) {
-    await setCached([[key, search]], REDIS_TTL_SECONDS);
-  }
-
-  return search;
 }

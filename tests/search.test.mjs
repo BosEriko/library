@@ -1,29 +1,29 @@
 import test, { mock } from "node:test";
 import assert from "node:assert/strict";
 
-const cache = new Map();
+const calls = [];
 let gamesFail = false;
 
-mock.module("@/lib/redis", {
-  namedExports: {
-    getCached: async (keys) => keys.map((key) => cache.get(key)),
-    setCached: async (entries) => {
-      for (const [key, value] of entries) cache.set(key, value);
-    },
-  },
-});
 mock.module("@/lib/providers/anime-manga", {
   namedExports: {
-    searchAnimeManga: async (query, type) => [
-      { id: `${type}_1`, type, title: query, source: { provider: "myanimelist" }, details: {} },
-    ],
+    searchAnimeManga: async (query, type, limit) => {
+      calls.push([type, limit]);
+      return Array.from({ length: limit }, (_, index) => ({
+        id: `${type}_${index + 1}`,
+        type,
+        title: query,
+        source: { provider: "myanimelist" },
+        details: {},
+      }));
+    },
   },
 });
 mock.module("@/lib/providers/igdb", {
   namedExports: {
-    searchIgdb: async (query) => {
+    searchIgdb: async (query, limit) => {
+      calls.push(["GAME", limit]);
       if (gamesFail) throw new Error("IGDB down");
-      return [{ id: "GAME_1", title: query }];
+      return Array.from({ length: limit }, (_, index) => ({ id: `GAME_${index + 1}`, type: "GAME", title: query }));
     },
   },
 });
@@ -31,56 +31,32 @@ mock.module("@/lib/providers/igdb", {
 const { searchAll } = await import("@/lib/search");
 
 test.beforeEach(() => {
-  cache.clear();
+  calls.length = 0;
   gamesFail = false;
 });
 
-test("searches are cached without regard to letter case", async () => {
-  await searchAll("Zelda", 5, false);
+test("every search asks each provider for the requested limit", async () => {
+  const first = await searchAll("zelda", 3, false);
+  await searchAll("zelda", 3, false);
 
-  assert.deepEqual([...cache.keys()], ["search:safe:5:zelda"]);
-
-  const cached = await searchAll("ZELDA", 5, false);
-
-  assert.equal(cached.results.game[0].title, "Zelda");
-});
-
-test("adult and limit settings get their own cache entries", async () => {
-  await searchAll("zelda", 5, false);
-  await searchAll("zelda", 5, true);
-  await searchAll("zelda", 10, false);
-
-  assert.deepEqual([...cache.keys()].sort(), [
-    "search:adult:5:zelda",
-    "search:safe:10:zelda",
-    "search:safe:5:zelda",
+  assert.deepEqual(calls, [
+    ["ANIME", 3],
+    ["MANGA", 3],
+    ["GAME", 3],
+    ["ANIME", 3],
+    ["MANGA", 3],
+    ["GAME", 3],
   ]);
+  assert.equal(first.results.anime.length, 3);
+  assert.equal(first.results.game[0].title, "zelda");
 });
 
-test("a search cached with an older source is searched again", async () => {
-  cache.set("search:safe:5:zelda", {
-    results: {
-      anime: [
-        { id: "ANIME_9", type: "ANIME", title: "old", source: { provider: "older" }, details: {} },
-      ],
-      manga: [],
-      game: [],
-    },
-    errors: {},
-  });
-
-  const result = await searchAll("zelda", 5, false);
-
-  assert.equal(result.results.anime[0].title, "zelda");
-  assert.equal(cache.get("search:safe:5:zelda").results.anime[0].title, "zelda");
-});
-
-test("a search where a provider failed is returned but not cached", async () => {
+test("a provider that failed is returned empty with an error", async () => {
   gamesFail = true;
 
   const result = await searchAll("zelda", 5, false);
 
   assert.deepEqual(result.results.game, []);
   assert.equal(result.errors.game, "Search failed");
-  assert.equal(cache.size, 0);
+  assert.equal(result.results.anime.length, 5);
 });

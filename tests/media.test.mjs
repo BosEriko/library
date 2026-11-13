@@ -13,6 +13,7 @@ let provider = async () => {
 let lockAcquired = true;
 let failWrites = false;
 const heldLocks = new Set();
+const cache = new Map();
 
 function fakeDb() {
   return {
@@ -57,6 +58,10 @@ mock.module("@/lib/redis", {
     releaseLock: async (key) => {
       heldLocks.delete(key);
     },
+    getCached: async (keys) => keys.map((key) => cache.get(key)),
+    setCached: async (entries) => {
+      for (const [key, value] of entries) cache.set(key, value);
+    },
   },
 });
 mock.module("next/server", {
@@ -64,7 +69,7 @@ mock.module("next/server", {
 });
 
 const { getOrFetchMedia, saveMediaItems } = await import("@/lib/media");
-const { AdultContentError } = await import("@/lib/http");
+const { AdultContentError, NotFoundError } = await import("@/lib/http");
 
 function media(overrides = {}) {
   return {
@@ -107,6 +112,7 @@ test.beforeEach(() => {
   events.length = 0;
   scheduled.length = 0;
   heldLocks.clear();
+  cache.clear();
   lockAcquired = true;
   failWrites = false;
 });
@@ -255,6 +261,67 @@ test("a saved game that isn't on Steam is returned without calling the provider"
 
   assert.equal(result.details.steamUrl, null);
   assert.equal(scheduled.length, 0);
+});
+
+test("an id the provider doesn't have is remembered for a day without calling it again", async () => {
+  let calls = 0;
+  provider = async () => {
+    calls += 1;
+    throw new NotFoundError("not found");
+  };
+
+  await assert.rejects(getOrFetchMedia("ANIME", "1", false), NotFoundError);
+  await assert.rejects(getOrFetchMedia("ANIME", "1", true), NotFoundError);
+
+  assert.equal(calls, 1);
+  assert.equal(cache.get("refused:ANIME_1"), "missing");
+});
+
+test("an adult title refused without adult=true isn't fetched again until adult=true is passed", async () => {
+  let calls = 0;
+  provider = async () => {
+    calls += 1;
+    return media({ isAdult: true });
+  };
+
+  await assert.rejects(getOrFetchMedia("ANIME", "1", false), AdultContentError);
+  await assert.rejects(getOrFetchMedia("ANIME", "1", false), AdultContentError);
+
+  assert.equal(calls, 1);
+  assert.equal(docs.size, 0);
+
+  const result = await getOrFetchMedia("ANIME", "1", true);
+
+  assert.equal(result.isAdult, true);
+  assert.equal(calls, 2);
+});
+
+test("a failure other than not found isn't remembered", async () => {
+  provider = async () => {
+    throw new Error("provider down");
+  };
+
+  await assert.rejects(getOrFetchMedia("ANIME", "1", false), /provider down/);
+
+  assert.equal(cache.size, 0);
+});
+
+test("requests for the same new title at once call the provider once", async () => {
+  let calls = 0;
+  provider = async () => {
+    calls += 1;
+    await new Promise((resolve) => setTimeout(resolve, 10));
+    return media();
+  };
+
+  const results = await Promise.all([
+    getOrFetchMedia("ANIME", "1", false),
+    getOrFetchMedia("ANIME", "1", false),
+    getOrFetchMedia("ANIME", "1", false),
+  ]);
+
+  assert.equal(calls, 1);
+  assert.deepEqual(results.map((result) => result.title), ["Title", "Title", "Title"]);
 });
 
 test("a provider failure with nothing saved is passed on", async () => {

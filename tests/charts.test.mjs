@@ -79,6 +79,7 @@ mock.module("@/lib/redis", {
       locks.push([key, ttlSeconds]);
       return lock(key);
     },
+    releaseLock: async () => {},
   },
 });
 mock.module("@/lib/rate-limit", {

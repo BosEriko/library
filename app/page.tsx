@@ -666,19 +666,21 @@ export default function Home() {
           <h2>Caching</h2>
           <ul className={styles.list}>
             <li>
-              <strong>Search and Steam, 7 days.</strong> Results are cached in Redis. Search ignores
-              letter case, so <code>q=Naruto</code> and <code>q=naruto</code> share a result, and
-              Steam app ids are cached one by one, including ids with no match. A search where any
-              provider failed is not cached.
+              <strong>Steam, 7 days.</strong> Results are cached in Redis. Steam app ids are cached
+              one by one, including ids with no match. Search results are not cached on the server.
             </li>
             <li>
               <strong>Profiles, 30 days.</strong> Profiles are saved to Firestore. Once the saved
               copy is older than 30 days, it is still returned right away and a fresh copy is
-              fetched from the provider in the background for the next request.
+              fetched from the provider in the background for the next request. An id the provider
+              doesn&apos;t have, or an 18+ title requested without <code>adult=true</code>, is
+              remembered in Redis for a day, so the 404 or 403 is returned without asking the
+              provider again.
             </li>
             <li>
               <strong>Lists and seasons, 1 day.</strong> Each list and season is saved to
-              Firestore and rebuilt from the provider once the saved copy is a day old. If the
+              Firestore and rebuilt from the provider once the saved copy is a day old. Only one
+              rebuild runs at a time, and other requests get the older copy meanwhile. If the
               provider is unavailable, the older copy is returned.
             </li>
             <li>
@@ -693,6 +695,10 @@ export default function Home() {
               again in case the image has changed.
             </li>
           </ul>
+          <p>
+            Requests that arrive at once for the same title, list or season share one
+            provider call, and the IGDB access token is kept in Redis until it expires.
+          </p>
           <p>
             Every response also sends a <code>Cache-Control</code> header, so browsers and any CDN in
             front of the API can keep it for the same time.
