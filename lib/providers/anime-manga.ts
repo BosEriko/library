@@ -320,3 +320,86 @@ export async function getAnimeManga(id: string, type: AnimeMangaType): Promise<M
 
   return normalize(data.Media, data.Media.idMal, type);
 }
+
+export interface AiringEpisode {
+  id: string;
+  episode: number;
+  airsAt: string;
+}
+
+const MAX_SCHEDULE_PAGES = 10;
+
+function scheduleIdsQuery(allowAdult: boolean): string {
+  const adultFilter = allowAdult ? "" : ", isAdult: false";
+
+  return `
+    query ($ids: [Int], $perPage: Int) {
+      Page(perPage: $perPage) {
+        media(idMal_in: $ids, type: ANIME${adultFilter}) { id idMal }
+      }
+    }
+  `;
+}
+
+const SCHEDULE_QUERY = `
+  query ($mediaIds: [Int], $from: Int, $to: Int, $page: Int, $perPage: Int) {
+    Page(page: $page, perPage: $perPage) {
+      pageInfo { hasNextPage }
+      airingSchedules(mediaId_in: $mediaIds, airingAt_greater: $from, airingAt_lesser: $to, sort: TIME) {
+        mediaId
+        episode
+        airingAt
+      }
+    }
+  }
+`;
+
+export async function scheduleAnime(
+  ids: string[],
+  from: Date,
+  to: Date,
+  allowAdult: boolean,
+): Promise<AiringEpisode[]> {
+  const found = await queryApi<{ Page: { media: { id: number; idMal: number | null }[] } }>(
+    scheduleIdsQuery(allowAdult),
+    { ids: ids.map(Number), perPage: PAGE_SIZE },
+  );
+  const sourceIds = new Map(
+    found.Page.media.flatMap((item) => (item.idMal === null ? [] : [[item.id, String(item.idMal)]])),
+  );
+
+  if (sourceIds.size === 0) {
+    return [];
+  }
+
+  const episodes: AiringEpisode[] = [];
+
+  for (let page = 1; page <= MAX_SCHEDULE_PAGES; page++) {
+    const data = await queryApi<{
+      Page: {
+        pageInfo: { hasNextPage: boolean };
+        airingSchedules: { mediaId: number; episode: number; airingAt: number }[];
+      };
+    }>(SCHEDULE_QUERY, {
+      mediaIds: [...sourceIds.keys()],
+      from: Math.floor(from.getTime() / 1000) - 1,
+      to: Math.floor(to.getTime() / 1000),
+      page,
+      perPage: PAGE_SIZE,
+    });
+
+    for (const item of data.Page.airingSchedules) {
+      const id = sourceIds.get(item.mediaId);
+
+      if (id) {
+        episodes.push({ id, episode: item.episode, airsAt: new Date(item.airingAt * 1000).toISOString() });
+      }
+    }
+
+    if (!data.Page.pageInfo.hasNextPage) {
+      break;
+    }
+  }
+
+  return episodes;
+}

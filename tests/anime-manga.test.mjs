@@ -4,7 +4,7 @@ import { NotFoundError } from "@/lib/http";
 
 process.env.ANIME_MANGA_API_URL = "https://anime-manga.test/graphql";
 
-const { getAnimeManga, listAnimeManga, searchAnimeManga, seasonAnimeManga } = await import(
+const { getAnimeManga, listAnimeManga, scheduleAnime, searchAnimeManga, seasonAnimeManga } = await import(
   "@/lib/providers/anime-manga"
 );
 
@@ -223,4 +223,50 @@ test("a missing API address is reported", async () => {
   } finally {
     process.env.ANIME_MANGA_API_URL = url;
   }
+});
+
+test("the schedule maps provider ids back to external ids and pages through episodes", async () => {
+  const bodies = [];
+  const responses = [
+    { Page: { media: [{ id: 154587, idMal: 52991 }, { id: 7, idMal: null }] } },
+    {
+      Page: {
+        pageInfo: { hasNextPage: true },
+        airingSchedules: [{ mediaId: 154587, episode: 1, airingAt: 1763300000 }],
+      },
+    },
+    {
+      Page: {
+        pageInfo: { hasNextPage: false },
+        airingSchedules: [{ mediaId: 154587, episode: 2, airingAt: 1763904800 }],
+      },
+    },
+  ];
+  mock.method(globalThis, "fetch", async (_url, init) => {
+    bodies.push(JSON.parse(init.body));
+    return Response.json({ data: responses.shift() });
+  });
+
+  const episodes = await scheduleAnime(
+    ["52991"],
+    new Date("2026-10-31T00:00:00.000Z"),
+    new Date("2026-12-02T00:00:00.000Z"),
+    false,
+  );
+
+  assert.deepEqual(episodes, [
+    { id: "52991", episode: 1, airsAt: new Date(1763300000 * 1000).toISOString() },
+    { id: "52991", episode: 2, airsAt: new Date(1763904800 * 1000).toISOString() },
+  ]);
+  assert.match(bodies[0].query, /isAdult: false/);
+  assert.deepEqual(bodies[0].variables.ids, [52991]);
+  assert.deepEqual(bodies[1].variables.mediaIds, [154587]);
+  assert.equal(bodies[2].variables.page, 2);
+});
+
+test("the schedule skips the episode query when no ids are found", async () => {
+  const fetch = mockApi({ Page: { media: [] } });
+
+  assert.deepEqual(await scheduleAnime(["1"], new Date(), new Date(), true), []);
+  assert.equal(fetch.mock.callCount(), 1);
 });

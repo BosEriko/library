@@ -9,6 +9,7 @@ const SECTIONS = [
   { id: "lists", label: "Lists" },
   { id: "seasons", label: "Seasons" },
   { id: "charts", label: "Charts" },
+  { id: "schedule", label: "Schedule" },
   { id: "schema", label: "Media schema" },
   { id: "caching", label: "Caching" },
   { id: "errors", label: "Errors" },
@@ -83,6 +84,19 @@ const CHART_PARAMS = [
 const CHART_QUERY_PARAMS = [
   { name: "week", type: "string", required: false, description: "An ISO week such as 2026-W46. Weeks start on Monday at 00:00 UTC. Defaults to the current week." },
   { name: "adult", type: "boolean", required: false, description: "Set to true to include 18+ titles. They are excluded by default, and each version is a separate chart." },
+];
+
+const SCHEDULE_QUERY_PARAMS = [
+  { name: "month", type: "string", required: true, description: "A month such as 2026-11, from one month before the current month to two months after it." },
+  { name: "ids", type: "string", required: true, description: "1 to 50 comma-separated anime ids, the same ids the profile endpoint uses." },
+  { name: "adult", type: "boolean", required: false, description: "Set to true to include 18+ titles. They are excluded by default." },
+];
+
+const SCHEDULE_FIELDS = [
+  { name: "month", type: "string", description: "The requested month, e.g. 2026-11." },
+  { name: "startsAt", type: "string", description: "ISO date the window starts: the day before the month starts, 00:00 UTC." },
+  { name: "endsAt", type: "string", description: "ISO date the window ends: the day after the month ends, 00:00 UTC." },
+  { name: "episodes", type: "Episode[]", description: "Every episode airing in the window, earliest first. Each has the anime id, the episode number and airsAt, the ISO date and time it airs." },
 ];
 
 const CHARTS = [
@@ -223,6 +237,17 @@ const SEASON_RESPONSE = `{
     …
   ],
   "updatedAt": "2026-11-11T08:00:00.000Z"
+}`;
+
+const SCHEDULE_RESPONSE = `{
+  "month": "2026-11",
+  "startsAt": "2026-10-31T00:00:00.000Z",
+  "endsAt": "2026-12-02T00:00:00.000Z",
+  "episodes": [
+    { "id": "52991", "episode": 6, "airsAt": "2026-11-14T14:30:00.000Z" },
+    { "id": "21", "episode": 1150, "airsAt": "2026-11-15T00:30:00.000Z" },
+    …
+  ]
 }`;
 
 const CHART_RESPONSE = `{
@@ -609,6 +634,46 @@ export default function Home() {
           <Example label="Response">{CHART_RESPONSE}</Example>
         </section>
 
+        <section id="schedule" className={styles.section}>
+          <h2>Schedule</h2>
+          <Endpoint path="/api/schedule?month={month}&ids={ids}" />
+          <p>
+            Returns when episodes of the given anime air during a month. The window starts a day
+            early and ends a day late, so a calendar in any time zone can show the whole month.
+            Titles that aren&apos;t airing, or that the provider doesn&apos;t have, have no
+            episodes. Manga and games have no schedule.
+          </p>
+
+          <h3>Query parameters</h3>
+          <Params rows={SCHEDULE_QUERY_PARAMS} />
+
+          <h3>Fields</h3>
+          <table className={styles.table}>
+            <thead>
+              <tr>
+                <th scope="col">Field</th>
+                <th scope="col">Type</th>
+                <th scope="col">Description</th>
+              </tr>
+            </thead>
+            <tbody>
+              {SCHEDULE_FIELDS.map((field) => (
+                <tr key={field.name}>
+                  <td>
+                    <code className={styles.name}>{field.name}</code>
+                  </td>
+                  <td className={styles.type}>{field.type}</td>
+                  <td>{field.description}</td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+
+          <h3>Example</h3>
+          <Example label="Request">{"curl '/api/schedule?month=2026-11&ids=52991,21'"}</Example>
+          <Example label="Response">{SCHEDULE_RESPONSE}</Example>
+        </section>
+
         <section id="schema" className={styles.section}>
           <h2>Media schema</h2>
           <p>Search results and profiles share the same shape for every type.</p>
@@ -693,12 +758,17 @@ export default function Home() {
               saved or cached, so a later request tries again.
             </li>
             <li>
+              <strong>Schedules, 12 hours.</strong> Each anime&apos;s episodes for a month are
+              cached in Redis on their own, so a request only asks the provider for the ids that
+              aren&apos;t cached yet. If the provider is unavailable, nothing is cached.
+            </li>
+            <li>
               <strong>Images, 1 hour.</strong> Browsers keep each redirect for an hour, then ask
               again in case the image has changed.
             </li>
           </ul>
           <p>
-            Requests that arrive at once for the same title, list, season or search share one
+            Requests that arrive at once for the same title, list, season, schedule or search share one
             provider call, and the IGDB access token is kept in Redis until it expires.
           </p>
           <p>
